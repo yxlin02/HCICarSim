@@ -7,6 +7,7 @@
 #include "AgentGameInstance.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "VibrationSender.h"
 
 void URecommendationManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -134,6 +135,22 @@ void URecommendationManager::DisplayRecommendation()
     if (Entry.Recommendation_Haptic)
     {
         UE_LOG(LogTemp, Log, TEXT("Haptics triggered for recommendation."));
+
+        // Send UDP vibration to external ESP board
+        TArray<AActor*> FoundActors;
+        UGameplayStatics::GetAllActorsOfClass(World, AVibrationSender::StaticClass(), FoundActors);
+        if (FoundActors.Num() > 0)
+        {
+            if (AVibrationSender* VibSender = Cast<AVibrationSender>(FoundActors[0]))
+            {
+                VibSender->SendStrongVibration();
+                UE_LOG(LogTemp, Log, TEXT("[RecommendationManager] UDP vibration sent to ESP board."));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[RecommendationManager] No VibrationSender actor found in level. Add one to enable UDP haptics."));
+        }
     }
 }
 

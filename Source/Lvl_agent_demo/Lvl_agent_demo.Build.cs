@@ -19,8 +19,10 @@ public class Lvl_agent_demo : ModuleRules
 			"UMG",
 			"Slate",
             "SlateCore",
-            "ImageWrapper"
-		});
+            "ImageWrapper",
+            "Networking",
+			"Sockets"
+        });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"Lvl_agent_demo",
