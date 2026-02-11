@@ -5,6 +5,9 @@
 #include "TimerManager.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/GameViewportClient.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Widgets/SWindow.h"
 
 UDecisionManagerComponent::UDecisionManagerComponent()
 {
@@ -15,7 +18,7 @@ void UDecisionManagerComponent::BeginPlay()
 {
     Super::BeginPlay();
     StartCooldown();
-    
+
     // Spawn Recommendation UI
     UWorld* World = GetWorld();
     if (!World)
@@ -37,14 +40,126 @@ void UDecisionManagerComponent::BeginPlay()
         UE_LOG(LogTemp, Error, TEXT("[GM] RecommendationManager not found"));
         return;
     }
-    
+
     if (UUserWidget* RecommendationWidgetInstance = Cast<UUserWidget>(RecMgr->RecommendationWidget))
     {
         TriggerDecision();
-        RecommendationWidgetInstance->AddToViewport(100);
-        UE_LOG(LogTemp, Display, TEXT("[GM] Recommendation widget added to viewport."));
+
+        // ===== 新增：创建独立窗口 =====
+        CreateSeparateWindowForWidget(RecommendationWidgetInstance);
+        // ===== 结束新增 =====
+
+        UE_LOG(LogTemp, Display, TEXT("[GM] Recommendation widget added to separate window."));
     }
 }
+
+// ===== 新增：组件销毁时关闭窗口 =====
+void UDecisionManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    // 清理所有定时器
+    if (UWorld* World = GetWorld())
+    {
+        FTimerManager& TimerManager = World->GetTimerManager();
+        TimerManager.ClearTimer(CooldownTimerHandle);
+        TimerManager.ClearTimer(RespondTimerHandle);
+        TimerManager.ClearTimer(AgentReactionAnimationHandle);
+    }
+
+    // 关闭独立窗口
+    if (RecommendationWindow.IsValid() && FSlateApplication::IsInitialized())
+    {
+        FSlateApplication::Get().RequestDestroyWindow(RecommendationWindow.ToSharedRef());
+        RecommendationWindow.Reset();
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Recommendation window closed on component destruction"));
+    }
+
+    Super::EndPlay(EndPlayReason);
+}
+// ===== 结束新增 =====
+
+// ===== 新增函数：创建独立窗口（兼容单/双显示器）=====
+void UDecisionManagerComponent::CreateSeparateWindowForWidget(UUserWidget* Widget)
+{
+    if (!Widget || !FSlateApplication::IsInitialized())
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DecisionManager] Cannot create window: Invalid widget or Slate not initialized"));
+        return;
+    }
+
+    // 获取显示器信息
+    FDisplayMetrics DisplayMetrics;
+    FSlateApplication::Get().GetDisplayMetrics(DisplayMetrics);
+
+    // 窗口尺寸
+    const float WindowWidth = 1920.0f;
+    const float WindowHeight = 720.0f;
+
+    // 计算窗口位置
+    FVector2D WindowPosition;
+    bool bHasSecondMonitor = false;
+
+    // 检查是否有第二显示器
+    // 方法：虚拟屏幕宽度 > 主显示器宽度，说明有多个显示器
+    if (DisplayMetrics.VirtualDisplayRect.Right > DisplayMetrics.PrimaryDisplayWidth)
+    {
+        // 有第二显示器，将窗口放在右侧显示器的左上角
+        WindowPosition = FVector2D(DisplayMetrics.PrimaryDisplayWidth, 0);
+        bHasSecondMonitor = true;
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Second monitor detected!"));
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Primary Display: %d x %d"),
+            DisplayMetrics.PrimaryDisplayWidth,
+            DisplayMetrics.PrimaryDisplayHeight);
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Virtual Display: %d x %d"),
+            DisplayMetrics.VirtualDisplayRect.Right,
+            DisplayMetrics.VirtualDisplayRect.Bottom);
+    }
+    else
+    {
+        // 只有一个显示器，居中显示窗口
+        WindowPosition = FVector2D(
+            (DisplayMetrics.PrimaryDisplayWidth - WindowWidth) / 2.0f,
+            (DisplayMetrics.PrimaryDisplayHeight - WindowHeight) / 2.0f
+        );
+        bHasSecondMonitor = false;
+        UE_LOG(LogTemp, Warning, TEXT("[DecisionManager] Only one monitor detected, centering window"));
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Primary Display: %d x %d"),
+            DisplayMetrics.PrimaryDisplayWidth,
+            DisplayMetrics.PrimaryDisplayHeight);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Window Position: (%.0f, %.0f)"),
+        WindowPosition.X,
+        WindowPosition.Y);
+
+    // 创建新窗口 - 固定1920x720像素，禁止调整大小
+    TSharedRef<SWindow> NewWindow = SNew(SWindow)
+        .Title(FText::FromString(bHasSecondMonitor ?
+            TEXT("Recommendation System - Second Monitor") :
+            TEXT("Recommendation System - Centered")))
+        .ClientSize(FVector2D(WindowWidth, WindowHeight))  // 固定为1920x720
+        .ScreenPosition(WindowPosition)                     // 设置窗口位置
+        .SupportsMaximize(false)                            // 禁用最大化
+        .SupportsMinimize(true)                             // 允许最小化
+        .IsTopmostWindow(false)
+        .SizingRule(ESizingRule::FixedSize)                 // 固定大小，不允许调整
+        .AutoCenter(EAutoCenter::None);                     // 不自动居中，使用自定义位置
+
+    // 将 UMG Widget 转换为 Slate Widget
+    TSharedRef<SWidget> SlateWidget = Widget->TakeWidget();
+
+    // 设置窗口内容
+    NewWindow->SetContent(SlateWidget);
+
+    // 将窗口添加到应用程序
+    FSlateApplication::Get().AddWindow(NewWindow);
+
+    // 保存窗口引用以便后续管理
+    RecommendationWindow = NewWindow;
+
+    UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Separate window created successfully (1920x720, fixed size, %s)"),
+        bHasSecondMonitor ? TEXT("on second monitor") : TEXT("centered on primary monitor"));
+}
+// ===== 结束新增 =====
 
 void UDecisionManagerComponent::StartCooldown()
 {
@@ -58,14 +173,14 @@ void UDecisionManagerComponent::StartCooldown()
         CooldownTime,
         false
     );
-    
+
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] Pawn cool down starts"));
 }
 
 void UDecisionManagerComponent::OnCooldownExpired()
 {
     bCooldownActive = false;
-    
+
     if (!bWaitingForResponse && bHitInWindow)
     {
         TriggerDecision();
@@ -85,12 +200,12 @@ void UDecisionManagerComponent::HandleColliderHit()
         bHitInWindow = true;
         return;
     }
-    
+
     if (bHitInWindow)
     {
         return;
     }
-    
+
     TriggerDecision();
 }
 
@@ -103,9 +218,9 @@ void UDecisionManagerComponent::TriggerDecision()
 
     bWaitingForResponse = true;
     bCooldownActive = false;
-    
+
     recommendationTimes++;
-    
+
     GetWorld()->GetTimerManager().SetTimer(
         RespondTimerHandle,
         this,
@@ -123,7 +238,7 @@ void UDecisionManagerComponent::TriggerDecision()
 void UDecisionManagerComponent::OnAccept()
 {
     if (!bWaitingForResponse) return;
-    
+
     GetWorld()->GetTimerManager().ClearTimer(RespondTimerHandle);
     RecMgr->CurrentDecision = EDecisionTypes::Accept;
     RecMgr->DisplayReaction();
@@ -136,9 +251,9 @@ void UDecisionManagerComponent::OnAccept()
         false
     );
 
-    // TODO: 处理“接受”的游戏逻辑
+    // TODO: 处理"接受"的游戏逻辑
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] User accepted the recommendation"));
-    
+
     // Play accept effect
     bWaitingForResponse = false;
     StartCooldown();
@@ -147,7 +262,7 @@ void UDecisionManagerComponent::OnAccept()
 void UDecisionManagerComponent::OnReject()
 {
     if (!bWaitingForResponse) return;
-    
+
     GetWorld()->GetTimerManager().ClearTimer(RespondTimerHandle);
     RecMgr->CurrentDecision = EDecisionTypes::Decline;
     RecMgr->DisplayReaction();
@@ -159,9 +274,9 @@ void UDecisionManagerComponent::OnReject()
         false
     );
 
-    // TODO: 处理“拒绝”的游戏逻辑
+    // TODO: 处理"拒绝"的游戏逻辑
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] User rejected the recommendation"));
-    
+
     // Play Reject effect
     bWaitingForResponse = false;
     StartCooldown();
@@ -170,7 +285,7 @@ void UDecisionManagerComponent::OnReject()
 void UDecisionManagerComponent::OnIgnore()
 {
     if (!bWaitingForResponse) return;
-    
+
     GetWorld()->GetTimerManager().ClearTimer(RespondTimerHandle);
     RecMgr->CurrentDecision = EDecisionTypes::Ignore;
     RecMgr->DisplayReaction();
@@ -182,9 +297,9 @@ void UDecisionManagerComponent::OnIgnore()
         false
     );
 
-    // TODO: 处理“拒绝”的游戏逻辑
+    // TODO: 处理"拒绝"的游戏逻辑
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] User ignored the recommendation"));
-    
+
     // Play ignore effect
     bWaitingForResponse = false;
     StartCooldown();
@@ -192,6 +307,10 @@ void UDecisionManagerComponent::OnIgnore()
 
 void UDecisionManagerComponent::OnAgentReactionEnd()
 {
-    RecMgr->RecommendationWidget->ShowReaction();
+    // 修改：只清除反应图片和推荐文本内容，保留主背景
+    if (RecMgr && RecMgr->RecommendationWidget)
+    {
+        RecMgr->RecommendationWidget->ClearReactionAndRecommendation();
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Agent reaction and recommendation cleared, background preserved"));
+    }
 }
-

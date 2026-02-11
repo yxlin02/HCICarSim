@@ -7,68 +7,70 @@
 #include "RecommendationManager.h"
 #include "DecisionManagerComponent.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FDecisionEvent);
+class SWindow;  // 前向声明
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDecisionTriggered);
+
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class LVL_AGENT_DEMO_API UDecisionManagerComponent : public UActorComponent
 {
     GENERATED_BODY()
 
 public:
-    // Sets default values for this component's properties
     UDecisionManagerComponent();
 
 protected:
-    // Called when the game starts
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;  // 新增
 
 public:
-    // Called every frame
-//    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
+    float CooldownTime = 5.0f;
 
-public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Decision")
-    float CooldownTime = 3.f;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Decision")
-    float RespondTime = 10.f;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Decision")
-    float AgentReactionAnimationTime = 2.f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
+    float RespondTime = 15.0f;
 
-    UPROPERTY(BlueprintAssignable, Category="Decision")
-    FDecisionEvent OnDecisionTriggered;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
+    float AgentReactionAnimationTime = 1.0f;
 
-    UFUNCTION(BlueprintCallable, Category="Decision")
+    UPROPERTY(BlueprintAssignable, Category = "Decision")
+    FOnDecisionTriggered OnDecisionTriggered;
+
+    UFUNCTION(BlueprintCallable, Category = "Decision")
     void HandleColliderHit();
 
-    UFUNCTION(BlueprintCallable, Category="Decision")
+    UFUNCTION(BlueprintCallable, Category = "Decision")
     void OnAccept();
 
-    UFUNCTION(BlueprintCallable, Category="Decision")
+    UFUNCTION(BlueprintCallable, Category = "Decision")
     void OnReject();
-    
-    UFUNCTION(BlueprintCallable, Category="Decision")
+
+    UFUNCTION(BlueprintCallable, Category = "Decision")
     void OnIgnore();
-    
+
 private:
     void StartCooldown();
     void OnCooldownExpired();
     void TriggerDecision();
-    
-    void DisplayReaction();
     void OnAgentReactionEnd();
 
-    bool bCooldownActive = false;
-    bool bHitInWindow = false;
-    bool bWaitingForResponse = false;
-    
-    URecommendationManager* RecMgr;
-    
-    int32 recommendationTimes = 0;
+    // ===== 新增：创建独立窗口 =====
+    void CreateSeparateWindowForWidget(UUserWidget* Widget);
+
+    /** 独立窗口引用 */
+    TSharedPtr<SWindow> RecommendationWindow;
+    // ===== 结束新增 =====
 
     FTimerHandle CooldownTimerHandle;
     FTimerHandle RespondTimerHandle;
     FTimerHandle AgentReactionAnimationHandle;
-        
+
+    bool bCooldownActive = false;
+    bool bWaitingForResponse = false;
+    bool bHitInWindow = false;
+
+    UPROPERTY()
+    URecommendationManager* RecMgr;
+
+    int recommendationTimes = 0;
 };
