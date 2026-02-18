@@ -242,7 +242,7 @@ void UDecisionManagerComponent::OnAccept()
     GetWorld()->GetTimerManager().ClearTimer(RespondTimerHandle);
     RecMgr->CurrentDecision = EDecisionTypes::Accept;
     RecMgr->DisplayReaction();
-    RecMgr->DisplayContent();
+    RecMgr->DisplayContent();  
     GetWorld()->GetTimerManager().SetTimer(
         AgentReactionAnimationHandle,
         this,
