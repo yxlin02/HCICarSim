@@ -8,6 +8,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SWindow.h"
+#include "Components/AudioComponent.h"  // ===== 新增：添加 AudioComponent 头文件 =====
 
 UDecisionManagerComponent::UDecisionManagerComponent()
 {
@@ -56,6 +57,14 @@ void UDecisionManagerComponent::BeginPlay()
 // ===== 新增：组件销毁时关闭窗口 =====
 void UDecisionManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    // ===== 新增：停止正在播放的音频 =====
+    if (CurrentContentAudioComponent && CurrentContentAudioComponent->IsPlaying())
+    {
+        CurrentContentAudioComponent->Stop();
+        CurrentContentAudioComponent = nullptr;
+    }
+    // ===== 结束新增 =====
+
     // 清理所有定时器
     if (UWorld* World = GetWorld())
     {
@@ -63,7 +72,7 @@ void UDecisionManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
         TimerManager.ClearTimer(CooldownTimerHandle);
         TimerManager.ClearTimer(RespondTimerHandle);
         TimerManager.ClearTimer(AgentReactionAnimationHandle);
-        TimerManager.ClearTimer(ContentDisplayTimerHandle);  // 新增：清理内容显示定时器
+        TimerManager.ClearTimer(ContentDisplayTimerHandle);
     }
 
     // 关闭独立窗口
@@ -134,8 +143,8 @@ void UDecisionManagerComponent::CreateSeparateWindowForWidget(UUserWidget* Widge
 
     // 创建新窗口 - 固定1920x720像素，禁止调整大小
     TSharedRef<SWindow> NewWindow = SNew(SWindow)
-        .Title(FText::FromString(bHasSecondMonitor ?
-            TEXT("Recommendation System - Second Monitor") :
+        .Title(FText::FromString(bHasSecondMonitor ? 
+            TEXT("Recommendation System - Second Monitor") : 
             TEXT("Recommendation System - Centered")))
         .ClientSize(FVector2D(WindowWidth, WindowHeight))  // 固定为1920x720
         .ScreenPosition(WindowPosition)                     // 设置窗口位置
@@ -217,6 +226,24 @@ void UDecisionManagerComponent::TriggerDecision()
         return;
     }
 
+    // ===== 新增：停止正在播放的内容音频并恢复原始图片 =====
+    if (CurrentContentAudioComponent && CurrentContentAudioComponent->IsPlaying())
+    {
+        CurrentContentAudioComponent->Stop();
+        CurrentContentAudioComponent = nullptr;
+        
+        // 清除内容显示定时器
+        GetWorld()->GetTimerManager().ClearTimer(ContentDisplayTimerHandle);
+        
+        // 恢复原始图片
+        if (RecMgr && RecMgr->RecommendationWidget)
+        {
+            RecMgr->RecommendationWidget->ClearContent();
+            UE_LOG(LogTemp, Display, TEXT("[Decision Manager] Previous content audio stopped and image restored due to new recommendation"));
+        }
+    }
+    // ===== 结束新增 =====
+
     bWaitingForResponse = true;
     bCooldownActive = false;
 
@@ -245,7 +272,10 @@ void UDecisionManagerComponent::OnAccept()
     RecMgr->DisplayReaction();
     RecMgr->DisplayContent();  
     
-    // 新增：获取 Content_Sound 的时长并设置定时器
+    // ===== 修改：保存当前播放的音频组件 =====
+    CurrentContentAudioComponent = RecMgr->GetLastContentAudioComponent();
+    
+    // 获取 Content_Sound 的时长并设置定时器
     if (RecMgr->Row && !RecMgr->Row->Content_Sound.IsNull())
     {
         if (USoundBase* ContentSound = RecMgr->Row->Content_Sound.LoadSynchronous())
@@ -264,6 +294,7 @@ void UDecisionManagerComponent::OnAccept()
             UE_LOG(LogTemp, Display, TEXT("[Decision Manager] Content will be hidden after %.2f seconds"), SoundDuration);
         }
     }
+    // ===== 结束修改 =====
     
     GetWorld()->GetTimerManager().SetTimer(
         AgentReactionAnimationHandle,
@@ -345,4 +376,8 @@ void UDecisionManagerComponent::OnContentSoundEnd()
         RecMgr->RecommendationWidget->ClearContent();
         UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Content image cleared after sound finished"));
     }
+    
+    // ===== 新增：清除音频组件引用 =====
+    CurrentContentAudioComponent = nullptr;
+    // ===== 结束新增 =====
 }

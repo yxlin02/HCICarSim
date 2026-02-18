@@ -58,4 +58,14 @@ public:
 
     UFUNCTION(BlueprintCallable)
     void DisplayContent();
+
+    // ===== 新增：返回播放内容音频时的音频组件 =====
+    UAudioComponent* GetLastContentAudioComponent() const { return LastContentAudioComponent; }
+    // ===== 结束新增 =====
+
+private:
+    // ===== 新增：保存最后播放的音频组件 =====
+    UPROPERTY()
+    UAudioComponent* LastContentAudioComponent;
+    // ===== 结束新增 =====
 };

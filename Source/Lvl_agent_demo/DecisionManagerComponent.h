@@ -67,6 +67,11 @@ private:
     FTimerHandle AgentReactionAnimationHandle;
     FTimerHandle ContentDisplayTimerHandle;  // 新增：用于控制内容显示时长
 
+    // ===== 新增：跟踪音频播放 =====
+    UPROPERTY()
+    UAudioComponent* CurrentContentAudioComponent;  // 当前正在播放的内容音频组件
+    // ===== 结束新增 =====
+
     bool bCooldownActive = false;
     bool bWaitingForResponse = false;
     bool bHitInWindow = false;

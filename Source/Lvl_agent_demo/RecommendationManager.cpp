@@ -236,12 +236,24 @@ void URecommendationManager::DisplayContent()
     }
 
     // 2. Play Sound
+    // ===== 修改：保存音频组件引用 =====
     if (Entry.Content_Sound.IsValid() || !Entry.Content_Sound.ToSoftObjectPath().IsNull())
     {
         USoundBase* Sound = Entry.Content_Sound.LoadSynchronous();
         if (Sound)
         {
-            UGameplayStatics::PlaySound2D(World, Sound);
+            // 使用 SpawnSound2D 返回音频组件
+            LastContentAudioComponent = UGameplayStatics::SpawnSound2D(World, Sound);
+            
+            if (LastContentAudioComponent)
+            {
+                UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] Content audio component created and playing"));
+            }
         }
     }
+    else
+    {
+        LastContentAudioComponent = nullptr;
+    }
+    // ===== 结束修改 =====
 }
