@@ -65,6 +65,22 @@ void URecommendationWidget::ShowContent(UTexture2D* InImage)
     {
         if (InImage)
         {
+            // ===== 另一种写法：直接使用引用 =====
+            const FSlateBrush& CurrentBrush = Image_ContentContent->GetBrush();
+            if (CurrentBrush.GetResourceObject())
+            {
+                // 从当前 Brush 中提取纹理资源
+                UObject* CurrentResource = CurrentBrush.GetResourceObject();
+                OriginalContentImage = Cast<UTexture2D>(CurrentResource);
+                
+                if (OriginalContentImage)
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[RecommendationWidget] Original image saved: %s"), 
+                           *OriginalContentImage->GetName());
+                }
+            }
+            // ===== 结束修正 =====
+
             FSlateBrush Brush;
             Brush.SetResourceObject(InImage);
             Image_ContentContent->SetBrush(Brush);
@@ -142,3 +158,30 @@ void URecommendationWidget::ClearReactionAndRecommendation()
     UE_LOG(LogTemp, Display, TEXT("[RecommendationWidget] Reaction and recommendation cleared, background preserved"));
 }
 // ===== 结束新增 =====
+
+void URecommendationWidget::ClearContent()
+{
+    if (Image_ContentContent)
+    {
+        // ===== 修改：恢复原始图片而不是隐藏 =====
+        if (OriginalContentImage)
+        {
+            // 恢复之前保存的原始图片
+            Image_ContentContent->SetBrushFromTexture(OriginalContentImage, true);
+            Image_ContentContent->SetVisibility(ESlateVisibility::Visible);
+            
+            UE_LOG(LogTemp, Display, TEXT("[RecommendationWidget] Original image restored: %s"), 
+                   *OriginalContentImage->GetName());
+            
+            // 清除缓存（可选，根据需求决定是否保留）
+            // OriginalContentImage = nullptr;
+        }
+        else
+        {
+            // 如果没有原始图片，则隐藏
+            Image_ContentContent->SetVisibility(ESlateVisibility::Collapsed);
+            UE_LOG(LogTemp, Warning, TEXT("[RecommendationWidget] No original image to restore, hiding instead"));
+        }
+        // ===== 结束修改 =====
+    }
+}

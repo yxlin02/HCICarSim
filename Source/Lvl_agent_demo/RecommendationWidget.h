@@ -38,6 +38,9 @@ public:
     void ClearReactionAndRecommendation();
     // ===== 结束新增 =====
 
+    UFUNCTION(BlueprintCallable, Category = "Recommendation")
+    void ClearContent();  // 新增：单独清除内容图片
+
 protected:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* TextBlock_RecommendationContent;
@@ -53,4 +56,10 @@ protected:
 
     UPROPERTY(meta = (BindWidget))
     UBorder* Border_TextBackground;
+
+    // ===== 新增：保存原始图片 =====
+private:
+    UPROPERTY()
+    UTexture2D* OriginalContentImage;  // 保存被覆盖前的原始图片
+    // ===== 结束新增 =====
 };

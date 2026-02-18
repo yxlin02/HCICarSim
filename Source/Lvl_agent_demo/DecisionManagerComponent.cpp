@@ -63,6 +63,7 @@ void UDecisionManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
         TimerManager.ClearTimer(CooldownTimerHandle);
         TimerManager.ClearTimer(RespondTimerHandle);
         TimerManager.ClearTimer(AgentReactionAnimationHandle);
+        TimerManager.ClearTimer(ContentDisplayTimerHandle);  // 新增：清理内容显示定时器
     }
 
     // 关闭独立窗口
@@ -243,6 +244,27 @@ void UDecisionManagerComponent::OnAccept()
     RecMgr->CurrentDecision = EDecisionTypes::Accept;
     RecMgr->DisplayReaction();
     RecMgr->DisplayContent();  
+    
+    // 新增：获取 Content_Sound 的时长并设置定时器
+    if (RecMgr->Row && !RecMgr->Row->Content_Sound.IsNull())
+    {
+        if (USoundBase* ContentSound = RecMgr->Row->Content_Sound.LoadSynchronous())
+        {
+            float SoundDuration = ContentSound->GetDuration();
+            
+            // 在音频播放结束时隐藏内容图片
+            GetWorld()->GetTimerManager().SetTimer(
+                ContentDisplayTimerHandle,
+                this,
+                &UDecisionManagerComponent::OnContentSoundEnd,
+                SoundDuration,
+                false
+            );
+            
+            UE_LOG(LogTemp, Display, TEXT("[Decision Manager] Content will be hidden after %.2f seconds"), SoundDuration);
+        }
+    }
+    
     GetWorld()->GetTimerManager().SetTimer(
         AgentReactionAnimationHandle,
         this,
@@ -312,5 +334,15 @@ void UDecisionManagerComponent::OnAgentReactionEnd()
     {
         RecMgr->RecommendationWidget->ClearReactionAndRecommendation();
         UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Agent reaction and recommendation cleared, background preserved"));
+    }
+}
+
+void UDecisionManagerComponent::OnContentSoundEnd()
+{
+    // 只清除内容图片
+    if (RecMgr && RecMgr->RecommendationWidget)
+    {
+        RecMgr->RecommendationWidget->ClearContent();
+        UE_LOG(LogTemp, Display, TEXT("[DecisionManager] Content image cleared after sound finished"));
     }
 }

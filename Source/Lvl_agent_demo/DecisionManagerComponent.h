@@ -53,6 +53,7 @@ private:
     void OnCooldownExpired();
     void TriggerDecision();
     void OnAgentReactionEnd();
+    void OnContentSoundEnd();  // 新增：音频播放结束回调
 
     // ===== 新增：创建独立窗口 =====
     void CreateSeparateWindowForWidget(UUserWidget* Widget);
@@ -64,6 +65,7 @@ private:
     FTimerHandle CooldownTimerHandle;
     FTimerHandle RespondTimerHandle;
     FTimerHandle AgentReactionAnimationHandle;
+    FTimerHandle ContentDisplayTimerHandle;  // 新增：用于控制内容显示时长
 
     bool bCooldownActive = false;
     bool bWaitingForResponse = false;
