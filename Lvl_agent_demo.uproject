@@ -29,6 +29,18 @@
 		{
 			"Name": "RawInput",
 			"Enabled": true
+		},
+		{
+			"Name": "WorldBLD",
+			"Enabled": true
+		},
+		{
+			"Name": "RoadBLD",
+			"Enabled": true
+		},
+		{
+			"Name": "CityBLD",
+			"Enabled": true
 		}
 	]
 }
