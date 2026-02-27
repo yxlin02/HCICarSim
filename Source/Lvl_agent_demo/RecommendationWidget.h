@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -19,6 +19,10 @@ class LVL_AGENT_DEMO_API URecommendationWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
+    // ===== æ–°å¢ï¼šé‡å†™ NativeConstruct åœ¨åˆå§‹åŒ–æ—¶ä¿å­˜åŸå§‹å›¾ç‰‡ =====
+    virtual void NativeConstruct() override;
+    // ===== ç»“æŸæ–°å¢ =====
+
     UFUNCTION(BlueprintCallable)
     void ShowReaction(
         const FText& InText = FText::GetEmpty(),
@@ -28,18 +32,14 @@ public:
     UFUNCTION(BlueprintCallable)
     void ShowContent(UTexture2D* InImage);
 
-    // ===== ĞÂÔö£ºÇå³ıËùÓĞÏÔÊ¾ÄÚÈİµÄº¯Êı =====
     UFUNCTION(BlueprintCallable)
     void ClearAllContent();
-    // ===== ½áÊøĞÂÔö =====
 
-    // ===== ĞÂÔö£ºÖ»Çå³ı·´Ó¦ºÍÍÆ¼öÄÚÈİ£¬±£Áô±³¾° =====
     UFUNCTION(BlueprintCallable)
     void ClearReactionAndRecommendation();
-    // ===== ½áÊøĞÂÔö =====
 
     UFUNCTION(BlueprintCallable, Category = "Recommendation")
-    void ClearContent();  // ĞÂÔö£ºµ¥¶ÀÇå³ıÄÚÈİÍ¼Æ¬
+    void ClearContent();
 
 protected:
     UPROPERTY(meta = (BindWidget))
@@ -57,9 +57,7 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UBorder* Border_TextBackground;
 
-    // ===== ĞÂÔö£º±£´æÔ­Ê¼Í¼Æ¬ =====
 private:
     UPROPERTY()
-    UTexture2D* OriginalContentImage;  // ±£´æ±»¸²¸ÇÇ°µÄÔ­Ê¼Í¼Æ¬
-    // ===== ½áÊøĞÂÔö =====
+    UTexture2D* OriginalContentImage;  // ä¿å­˜æ¸¸æˆæœ€å¼€å§‹çš„åˆå§‹å›¾ç‰‡
 };

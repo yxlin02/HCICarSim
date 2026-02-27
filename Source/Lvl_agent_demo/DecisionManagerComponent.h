@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -7,7 +7,7 @@
 #include "RecommendationManager.h"
 #include "DecisionManagerComponent.generated.h"
 
-class SWindow;  // Ç°ÏòÉùÃ÷
+class SWindow;  // å‰å‘å£°æ˜
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDecisionTriggered);
 
@@ -21,7 +21,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
-    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;  // ĞÂÔö
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;  // ===== æ–°å¢ =====
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
@@ -53,24 +53,22 @@ private:
     void OnCooldownExpired();
     void TriggerDecision();
     void OnAgentReactionEnd();
-    void OnContentSoundEnd();  // ĞÂÔö£ºÒôÆµ²¥·Å½áÊø»Øµ÷
+    void OnContentSoundEnd();  // ===== æ–°å¢ï¼šéŸ³é¢‘æ’­æ”¾ç»“æŸå›è°ƒ =====
 
-    // ===== ĞÂÔö£º´´½¨¶ÀÁ¢´°¿Ú =====
+    // ===== æ–°å¢ï¼šåˆ›å»ºç‹¬ç«‹çª—å£ï¼ˆå¯é€‰åŠŸèƒ½ï¼‰=====
     void CreateSeparateWindowForWidget(UUserWidget* Widget);
-
-    /** ¶ÀÁ¢´°¿ÚÒıÓÃ */
     TSharedPtr<SWindow> RecommendationWindow;
-    // ===== ½áÊøĞÂÔö =====
+    // ===== ç»“æŸæ–°å¢ =====
 
     FTimerHandle CooldownTimerHandle;
     FTimerHandle RespondTimerHandle;
     FTimerHandle AgentReactionAnimationHandle;
-    FTimerHandle ContentDisplayTimerHandle;  // ĞÂÔö£ºÓÃÓÚ¿ØÖÆÄÚÈİÏÔÊ¾Ê±³¤
+    FTimerHandle ContentDisplayTimerHandle;  // ===== æ–°å¢ï¼šç”¨äºæ§åˆ¶å†…å®¹æ˜¾ç¤ºæ—¶é•¿ =====
 
-    // ===== ĞÂÔö£º¸ú×ÙÒôÆµ²¥·Å =====
+    // ===== æ–°å¢ï¼šè·Ÿè¸ªéŸ³é¢‘æ’­æ”¾ =====
     UPROPERTY()
-    UAudioComponent* CurrentContentAudioComponent;  // µ±Ç°ÕıÔÚ²¥·ÅµÄÄÚÈİÒôÆµ×é¼ş
-    // ===== ½áÊøĞÂÔö =====
+    UAudioComponent* CurrentContentAudioComponent;
+    // ===== ç»“æŸæ–°å¢ =====
 
     bool bCooldownActive = false;
     bool bWaitingForResponse = false;

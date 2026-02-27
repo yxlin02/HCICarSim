@@ -35,11 +35,11 @@
 			"Enabled": true
 		},
 		{
-			"Name": "RoadBLD",
+			"Name": "CityBLD",
 			"Enabled": true
 		},
 		{
-			"Name": "CityBLD",
+			"Name": "RoadBLD",
 			"Enabled": true
 		}
 	]

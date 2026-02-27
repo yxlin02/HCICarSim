@@ -41,7 +41,6 @@ void ADecisionTrigger::BeginPlay()
 void ADecisionTrigger::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-
 }
 
 void ADecisionTrigger::OnTriggerBeginOverlap(
