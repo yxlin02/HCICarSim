@@ -5,7 +5,7 @@
 #include "Components/Image.h"
 #include "Components/Border.h"
 
-// ===== 新增：在 Widget 构造时保存初始图片 =====
+// ===== 修改：在 Widget 构造时保存初始图片并隐藏推荐UI元素 =====
 void URecommendationWidget::NativeConstruct()
 {
     Super::NativeConstruct();
@@ -34,8 +34,34 @@ void URecommendationWidget::NativeConstruct()
             UE_LOG(LogTemp, Warning, TEXT("[RecommendationWidget] Image_ContentContent brush has no resource object"));
         }
     }
+
+    // ===== 新增：隐藏推荐相关的UI元素 =====
+    // 隐藏推荐文本和背景
+    if (TextBlock_RecommendationContent)
+    {
+        TextBlock_RecommendationContent->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    if (Border_TextBackground)
+    {
+        Border_TextBackground->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    // 隐藏反应图片和背景
+    if (Image_ReactionContent)
+    {
+        Image_ReactionContent->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    if (Border_ReactionBackground)
+    {
+        Border_ReactionBackground->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[RecommendationWidget] Recommendation UI elements hidden at initialization"));
+    // ===== 结束新增 =====
 }
-// ===== 结束新增 =====
+// ===== 结束修改 =====
 
 void URecommendationWidget::ShowReaction(
     const FText& InText,
@@ -97,7 +123,6 @@ void URecommendationWidget::ShowContent(UTexture2D* InImage)
     {
         if (InImage)
         {
-            // ===== 修改：直接显示新图片，不需要再保存原始图片（已在 NativeConstruct 中保存） =====
             FSlateBrush Brush;
             Brush.SetResourceObject(InImage);
             Image_ContentContent->SetBrush(Brush);
@@ -105,7 +130,6 @@ void URecommendationWidget::ShowContent(UTexture2D* InImage)
 
             UE_LOG(LogTemp, Display, TEXT("[RecommendationWidget] Content image updated: %s"),
                 InImage ? *InImage->GetName() : TEXT("None"));
-            // ===== 结束修改 =====
         }
         else
         {
@@ -180,7 +204,6 @@ void URecommendationWidget::ClearContent()
 {
     if (Image_ContentContent)
     {
-        // ===== 修改：恢复初始保存的原始图片 =====
         if (OriginalContentImage)
         {
             // 恢复游戏最开始的初始图片
@@ -196,6 +219,5 @@ void URecommendationWidget::ClearContent()
             Image_ContentContent->SetVisibility(ESlateVisibility::Collapsed);
             UE_LOG(LogTemp, Warning, TEXT("[RecommendationWidget] No original image saved, hiding content instead"));
         }
-        // ===== 结束修改 =====
     }
 }
