@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -31,6 +31,9 @@ class LVL_AGENT_DEMO_API UTraffic_AICarManagerComponent : public UActorComponent
     GENERATED_BODY()
 
 public:
+    UTraffic_AICarManagerComponent();
+
+public:
     static UTraffic_AICarManagerComponent* GetTrafficManager(const UObject* WorldContext);
 
     UFUNCTION(BlueprintCallable, Category="Traffic")
@@ -49,6 +52,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
     UPROPERTY(EditInstanceOnly, Category="Spawn|Targets")
     TArray<TObjectPtr<AEnv_RoadLane>> TargetLanes;
@@ -91,4 +95,16 @@ private:
     URecommendationManager* RecMgr;
     
     int32 SceneID = -1;
+
+    UPROPERTY(EditAnywhere, Category = "Traffic|Approach")
+    bool bUsePawnApproachingEffect = true;
+
+    UPROPERTY(EditAnywhere, Category="Traffic|Approach")
+    float MaxAffectDist = 3000.f;
+
+    UPROPERTY(EditAnywhere, Category = "Traffic|Approach")
+    float MinApproachEffect = 0.3f;
+
+    UPROPERTY(EditAnywhere, Category = "Traffic|Approach")
+    float FalloffPower = 1.5f;
 };

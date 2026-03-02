@@ -5,11 +5,17 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "RecommendationManager.h"
+#include "UI_PauseGame.h"
 #include "DecisionManagerComponent.generated.h"
 
-class SWindow;  // 前向声明
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FDecisionEvent);
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnDecisionTriggered);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+    FOnReactionMake,
+    int32, Reactiontype
+);
+
+class SWindow; 
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class LVL_AGENT_DEMO_API UDecisionManagerComponent : public UActorComponent
@@ -21,7 +27,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
-    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;  // ===== 新增 =====
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
@@ -34,7 +40,10 @@ public:
     float AgentReactionAnimationTime = 1.0f;
 
     UPROPERTY(BlueprintAssignable, Category = "Decision")
-    FOnDecisionTriggered OnDecisionTriggered;
+    FDecisionEvent OnDecisionTriggered;
+
+    UPROPERTY(BlueprintAssignable, Category="Decision")
+    FOnReactionMake OnReactionMake;
 
     UFUNCTION(BlueprintCallable, Category = "Decision")
     void HandleColliderHit();
@@ -52,6 +61,7 @@ private:
     void StartCooldown();
     void OnCooldownExpired();
     void TriggerDecision();
+
     void OnAgentReactionEnd();
     void OnContentSoundEnd();  // ===== 新增：音频播放结束回调 =====
 
@@ -77,5 +87,22 @@ private:
     UPROPERTY()
     URecommendationManager* RecMgr;
 
-    int recommendationTimes = 0;
+    int32 recommendationTimes = 0;
+
+    UPROPERTY(EditAnywhere, Category="UI")
+    TSubclassOf<UUI_PauseGame> PauseGameWidgetClass;
+
+    UPROPERTY()
+    UUI_PauseGame* PauseGameWidgetInstance;
+
+    FTimerHandle PauseAfterAcceptHandle;
+
+    UPROPERTY(EditAnywhere, Category="Decision")
+    float AcceptReactionPauseDelay = 2.0f;
+
+    UFUNCTION()
+    void PauseGameAfterReaction();
+
+    UFUNCTION()
+    void OnContinueAfterReaction();
 };

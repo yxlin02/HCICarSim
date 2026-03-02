@@ -127,7 +127,7 @@ void ATraffic_AICar::UpdateTargetSpeed()
         bForceBrake = (stopDist >= (d - SafeDist));
     }
     
-    TargetSpeed = FMath::Max(0.f, NewTargetSpeed);
+    TargetSpeed = FMath::Max(0.f, NewTargetSpeed) * PawnApproachingEffect;
 }
 
 void ATraffic_AICar::UpdateSpeed(float DeltaTime)
@@ -316,3 +316,8 @@ void ATraffic_AICar::SetLaneIndex(int32 LaneIndex)
 
 int32 ATraffic_AICar::GetLaneIndex() const { return CurrentDrivingLaneIndex; }
 AEnv_RoadLane* ATraffic_AICar::GetCurrentLane() const { return CurrentDrivingLane; }
+
+void ATraffic_AICar::SetPawnApproachingEffect(float Effect)
+{
+    PawnApproachingEffect = Effect;
+}

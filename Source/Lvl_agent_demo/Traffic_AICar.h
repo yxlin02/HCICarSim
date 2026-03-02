@@ -86,6 +86,8 @@ public:
     int32 GetLaneIndex() const;
     AEnv_RoadLane* GetCurrentLane() const;
 
+    void SetPawnApproachingEffect(float Effect);
+
 protected:
     /** 根据前方是否有车 / 红灯状态更新 TargetSpeed（不做插值） */
     UFUNCTION()
@@ -118,6 +120,8 @@ protected:
         UPrimitiveComponent* OtherComp,
         int32 OtherBodyIndex
     );
+
+    float PawnApproachingEffect = 1.0;
 
 private:
     /** 是否前方存在潜在阻挡（车 / Pawn / 障碍物） */

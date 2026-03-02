@@ -11,6 +11,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
 #include "RecommendationManager.h"
+#include "Math/RandomStream.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
 namespace
@@ -19,6 +20,11 @@ namespace
     {
         return (uint64(GetTypeHash(Lane)) << 32) ^ uint64(uint32(LaneIdx));
     }
+}
+
+UTraffic_AICarManagerComponent::UTraffic_AICarManagerComponent() 
+{
+    PrimaryComponentTick.bCanEverTick = true;
 }
 
 void UTraffic_AICarManagerComponent::BeginPlay()
@@ -77,6 +83,86 @@ void UTraffic_AICarManagerComponent::BeginPlay()
     SceneID = RecMgr->GetCurrentSceneID();
     
     SpawnCar();
+}
+
+void UTraffic_AICarManagerComponent::TickComponent(
+    float DeltaTime,
+    ELevelTick TickType,
+    FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    if (!bUsePawnApproachingEffect) return;
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    APlayerController* PC = World->GetFirstPlayerController();
+    if (!PC)
+    {
+        return;
+    }
+
+    APawn* Pawn = PC->GetPawn();
+    if (!Pawn)
+    {
+        return;
+    }
+
+    const FVector PawnLoc = Pawn->GetActorLocation();
+    const FVector PawnForward = Pawn->GetActorForwardVector().GetSafeNormal();
+
+    const float SafeMaxDist = (MaxAffectDist > KINDA_SMALL_NUMBER)
+        ? MaxAffectDist
+        : 1.0f;
+
+    const float InvMaxDist = 1.0f / SafeMaxDist;
+    const float ClampedMinEffect = FMath::Clamp(MinApproachEffect, 0.0f, 1.0f);
+    const float SafeFalloffPower = (FalloffPower > 0.0f) ? FalloffPower : 1.0f;
+
+    for (auto It = AliveCars.CreateIterator(); It; ++It)
+    {
+        const TWeakObjectPtr<ATraffic_AICar>& WeakCar = *It;
+
+        if (!WeakCar.IsValid())
+        {
+            It.RemoveCurrent();
+            continue;
+        }
+
+        ATraffic_AICar* Car = WeakCar.Get();
+        if (!Car)
+        {
+            It.RemoveCurrent();
+            continue;
+        }
+
+        const FVector Offset = Car->GetActorLocation() - PawnLoc;
+        const float   ForwardDist = FVector::DotProduct(Offset, PawnForward);
+
+        float Effect = 1.0f;
+
+        if (ForwardDist > 0.0f && ForwardDist < SafeMaxDist)
+        {
+            const float t = ForwardDist * InvMaxDist;
+
+            const float tPow = FMath::Pow(t, SafeFalloffPower);
+
+            Effect = ClampedMinEffect + (1.0f - ClampedMinEffect) * tPow;
+        }
+        else
+        {
+            Effect = 1.0f;
+        }
+
+        Effect = FMath::Clamp(1-Effect, MinApproachEffect, 1.f);
+
+        //Car->PawnApproachingEffect = Effect;
+        Car->SetPawnApproachingEffect(Effect);
+    }
 }
 
 void UTraffic_AICarManagerComponent::RegisterCar(ATraffic_AICar* Car)
@@ -167,8 +253,8 @@ int32 UTraffic_AICarManagerComponent::DensityToCarsPerLane(ELaneCarDensity D) co
     switch (D)
     {
         case ELaneCarDensity::Low:  return 1;
-        case ELaneCarDensity::Mid:  return 3;
-        case ELaneCarDensity::High: return 6;
+        case ELaneCarDensity::Mid:  return 4;
+        case ELaneCarDensity::High: return 8;
         default: return 2;
     }
 }
@@ -274,7 +360,13 @@ bool UTraffic_AICarManagerComponent::TryGetLaneIndexConfig(
     if (SceneID == 1)
     {
         int32 DensityInt = static_cast<int32>(Out.Density);
-        DensityInt = FMath::Max(0, DensityInt - 2);
+        DensityInt = FMath::Max(0, DensityInt - 1);
+        Out.Density = static_cast<ELaneCarDensity>(DensityInt);
+    }
+    else 
+    {
+        int32 DensityInt = static_cast<int32>(Out.Density);
+        DensityInt = FMath::Min(2, DensityInt + 1);
         Out.Density = static_cast<ELaneCarDensity>(DensityInt);
     }
     
@@ -364,13 +456,19 @@ void UTraffic_AICarManagerComponent::SpawnCar()
             const int32 CarsPerLane = DensityToCarsPerLane(Cfg.Density);
             const float TargetSpeed = VelocityToTargetSpeed(Cfg.Velocity);
             
-            // 该车道中心Y：-HalfY ~ +HalfY
             const float CenterY = -HalfY + (LaneIdx + 0.5f) * LaneWidth;
             const float StepX = FMath::Max(MinGap, UsableLength / FMath::Max(1, CarsPerLane));
 
+            const float JitterAmount = StepX * 0.3f;
+            FRandomStream Rng(GetTypeHash(Lane) ^ LaneIdx * 97);
+
             for (int32 k = 0; k < CarsPerLane; ++k)
             {
-                const float LocalX = -HalfX + 100.f + k * StepX;
+                float BaseX = -HalfX + 100.f + k * StepX;
+                float Jitter = Rng.FRandRange(-JitterAmount, JitterAmount);
+
+                const float LocalX = BaseX + Jitter;
+
                 const FVector LocalPos(LocalX, CenterY, 0.f);
 
                 const FVector WorldPos = SpawnXf.TransformPosition(LocalPos);

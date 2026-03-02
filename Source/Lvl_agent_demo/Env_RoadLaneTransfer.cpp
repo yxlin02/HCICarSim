@@ -94,7 +94,7 @@ void AEnv_RoadLaneTransfer::OnConstruction(const FTransform& Transform)
     {
         const float TriggerThickness   = 200.f;        // cm
         const float TriggerHalfLength  = TriggerThickness * 0.5f;
-        const float TriggerHalfWidth   = HalfWidth;
+        const float TriggerHalfWidth   = HalfWidth * 0.9;
         const float TriggerHalfHeight  = 100.f;
 
         LoopTrigger->SetBoxExtent(FVector(TriggerHalfLength, TriggerHalfWidth, TriggerHalfHeight), true);
@@ -191,7 +191,7 @@ void AEnv_RoadLaneTransfer::OnLoopTriggerBeginOverlap(
         const float ForwardDist =
             FVector::DotProduct((Car->GetActorLocation() - PawnLoc), PawnFwd);
 
-        if (ForwardDist < -300.f)
+        if (ForwardDist < -300.f || ForwardDist > 5000.f)
             CarsToDestroy.Add(Car);
         else
             CarsToTeleport.Add(Car);

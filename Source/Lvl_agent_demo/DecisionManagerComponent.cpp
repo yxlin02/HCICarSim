@@ -275,10 +275,19 @@ void UDecisionManagerComponent::OnAccept()
         false
     );
 
+    OnReactionMake.Broadcast(1);
+
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] User accepted the recommendation"));
 
+    GetWorld()->GetTimerManager().SetTimer(
+        PauseAfterAcceptHandle,
+        this,
+        &UDecisionManagerComponent::PauseGameAfterReaction,
+        AcceptReactionPauseDelay,
+        false
+    );
+
     bWaitingForResponse = false;
-    StartCooldown();
 }
 
 void UDecisionManagerComponent::OnReject()
@@ -296,10 +305,19 @@ void UDecisionManagerComponent::OnReject()
         false
     );
 
+    OnReactionMake.Broadcast(-1);
+
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] User rejected the recommendation"));
 
+    GetWorld()->GetTimerManager().SetTimer(
+        PauseAfterAcceptHandle,
+        this,
+        &UDecisionManagerComponent::PauseGameAfterReaction,
+        AcceptReactionPauseDelay,
+        false
+    );
+
     bWaitingForResponse = false;
-    StartCooldown();
 }
 
 void UDecisionManagerComponent::OnIgnore()
@@ -317,10 +335,19 @@ void UDecisionManagerComponent::OnIgnore()
         false
     );
 
+    OnReactionMake.Broadcast(0);
+
     UE_LOG(LogTemp, Display, TEXT("[Decision Manager] User ignored the recommendation"));
 
+    GetWorld()->GetTimerManager().SetTimer(
+        PauseAfterAcceptHandle,
+        this,
+        &UDecisionManagerComponent::PauseGameAfterReaction,
+        AcceptReactionPauseDelay,
+        false
+    );
+
     bWaitingForResponse = false;
-    StartCooldown();
 }
 
 void UDecisionManagerComponent::OnAgentReactionEnd()
@@ -346,3 +373,35 @@ void UDecisionManagerComponent::OnContentSoundEnd()
     CurrentContentAudioComponent = nullptr;
 }
 // ===== 结束新增 =====
+
+void UDecisionManagerComponent::PauseGameAfterReaction() 
+{
+    if (!PauseGameWidgetClass) return;
+    if (!PauseGameWidgetInstance) 
+    {
+        PauseGameWidgetInstance = CreateWidget<UUI_PauseGame>(
+            GetWorld(),
+            PauseGameWidgetClass
+        );
+
+        if (PauseGameWidgetInstance) 
+        {
+            PauseGameWidgetInstance->OnContinue.AddDynamic(
+                this,
+                &UDecisionManagerComponent::OnContinueAfterReaction
+            );
+        }
+    }
+
+    if (PauseGameWidgetInstance) 
+    {
+        PauseGameWidgetInstance->ShowPauseUI();
+    }
+}
+
+void UDecisionManagerComponent::OnContinueAfterReaction() 
+{
+    StartCooldown();
+
+    UE_LOG(LogTemp, Display, TEXT("[Decision Manager] Continue after reaction, start cooling down"));
+}
