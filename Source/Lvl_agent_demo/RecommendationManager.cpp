@@ -9,6 +9,19 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/DataTable.h"
+#include "VibrationSender.h"   // ← 新增
+
+// ──────────────────────── 内部工具函数 ───────────────────────────────────────
+/** 在当前 World 中找到第一个 AVibrationSender 实例（如果有的话）*/
+static AVibrationSender* FindVibrationSender(UWorld* World)
+{
+    if (!World) return nullptr;
+    TArray<AActor*> Found;
+    UGameplayStatics::GetAllActorsOfClass(World, AVibrationSender::StaticClass(), Found);
+    return (Found.Num() > 0) ? Cast<AVibrationSender>(Found[0]) : nullptr;
+}
+
+// ── 其余函数保持不变，仅展示修改部分 ────────────────────────────────────────
 
 void URecommendationManager::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -501,10 +514,19 @@ void URecommendationManager::DisplayRecommendation()
         }
     }
 
-    // 3. Vibration）
+    // 3. Vibration — 触发 ESP 板振动
     if (Entry.Recommendation_Haptic)
     {
-        UE_LOG(LogTemp, Log, TEXT("Haptics triggered for recommendation."));
+        if (AVibrationSender* Sender = FindVibrationSender(World))
+        {
+            Sender->SendStrongVibration();
+            UE_LOG(LogTemp, Log, TEXT("[RecommendationManager] Haptics triggered via VibrationSender."));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("[RecommendationManager] Recommendation_Haptic=true but no AVibrationSender found in level."));
+        }
     }
 }
 

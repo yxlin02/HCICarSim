@@ -50,6 +50,12 @@ public:
 
     void Compact();
 
+	UFUNCTION(BlueprintCallable, Category = "Traffic|Spawn")
+	void SetCurrentLane(AEnv_RoadLane* Lane) { CurrentLane = Lane; }
+
+    UFUNCTION(BlueprintCallable, Category = "Traffic|Spawn")
+    bool GetUsePawnApproachingEffect() { return bUsePawnApproachingEffect; }
+
 protected:
     virtual void BeginPlay() override;
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -64,6 +70,8 @@ protected:
     void OnAnyLoopTransferTriggered(AEnv_RoadLaneTransfer* Transfer, AActor* OtherActor, AEnv_RoadLane* DestLane);
 
 private:
+    AEnv_RoadLane* CurrentLane = nullptr;
+
     TSet<TWeakObjectPtr<ATraffic_AICar>> AliveCars;
 
     UFUNCTION()

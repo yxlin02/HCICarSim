@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Lvl_agent_demoPawn.h"
 #include "Lvl_agent_demoWheelFront.h"
@@ -12,6 +12,8 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Lvl_agent_demo.h"
 #include "TimerManager.h"
+#include "MozaInputModifier.h"
+#include "Traffic_AICar.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
 

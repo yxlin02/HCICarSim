@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -94,22 +94,13 @@ public:
 	ALvl_agent_demoPawn();
 
 	// Begin Pawn interface
-
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-
 	// End Pawn interface
 
 	// Begin Actor interface
-
-	/** Initialization */
 	virtual void BeginPlay() override;
-
-	/** Cleanup */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
-
-	/** Update */
 	virtual void Tick(float Delta) override;
-
 	// End Actor interface
 
 protected:
@@ -193,14 +184,9 @@ protected:
 	void FlippedCheck();
 
 public:
-	/** Returns the front spring arm subobject */
 	FORCEINLINE USpringArmComponent* GetFrontSpringArm() const { return FrontSpringArm; }
-	/** Returns the front camera subobject */
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FrontCamera; }
-	/** Returns the back spring arm subobject */
 	FORCEINLINE USpringArmComponent* GetBackSpringArm() const { return BackSpringArm; }
-	/** Returns the back camera subobject */
 	FORCEINLINE UCameraComponent* GetBackCamera() const { return BackCamera; }
-	/** Returns the cast Chaos Vehicle Movement subobject */
 	FORCEINLINE const TObjectPtr<UChaosWheeledVehicleMovementComponent>& GetChaosVehicleMovement() const { return ChaosVehicleMovement; }
 };

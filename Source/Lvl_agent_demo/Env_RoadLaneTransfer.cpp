@@ -191,7 +191,7 @@ void AEnv_RoadLaneTransfer::OnLoopTriggerBeginOverlap(
         const float ForwardDist =
             FVector::DotProduct((Car->GetActorLocation() - PawnLoc), PawnFwd);
 
-        if (ForwardDist < -300.f || ForwardDist > 5000.f)
+        if (ForwardDist < -300.f)
             CarsToDestroy.Add(Car);
         else
             CarsToTeleport.Add(Car);

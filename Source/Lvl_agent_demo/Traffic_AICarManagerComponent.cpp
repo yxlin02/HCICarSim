@@ -113,7 +113,9 @@ void UTraffic_AICarManagerComponent::TickComponent(
     }
 
     const FVector PawnLoc = Pawn->GetActorLocation();
-    const FVector PawnForward = Pawn->GetActorForwardVector().GetSafeNormal();
+    const FVector PawnForward = (CurrentLane && IsValid(CurrentLane))
+        ? CurrentLane->GetActorForwardVector().GetSafeNormal()
+        : Pawn->GetActorForwardVector().GetSafeNormal();
 
     const float SafeMaxDist = (MaxAffectDist > KINDA_SMALL_NUMBER)
         ? MaxAffectDist
@@ -252,9 +254,9 @@ int32 UTraffic_AICarManagerComponent::DensityToCarsPerLane(ELaneCarDensity D) co
 {
     switch (D)
     {
-        case ELaneCarDensity::Low:  return 1;
-        case ELaneCarDensity::Mid:  return 4;
-        case ELaneCarDensity::High: return 8;
+        case ELaneCarDensity::Low:  return 3;
+        case ELaneCarDensity::Mid:  return 8;
+        case ELaneCarDensity::High: return 12;
         default: return 2;
     }
 }
@@ -264,8 +266,8 @@ float UTraffic_AICarManagerComponent::VelocityToTargetSpeed(ELaneCarVelocity V) 
     switch (V)
     {
         case ELaneCarVelocity::Slow: return 600.f;
-        case ELaneCarVelocity::Mid:  return 800.f;
-        case ELaneCarVelocity::Fast: return 1200.f;
+        case ELaneCarVelocity::Mid:  return 1000.f;
+        case ELaneCarVelocity::Fast: return 1500.f;
         default: return 800.f;
     }
 }
@@ -353,20 +355,16 @@ bool UTraffic_AICarManagerComponent::TryGetLaneIndexConfig(
         return false;
     }
 
+
+
     Out.LaneIndex   = MatchedRow->LaneIndex;
     Out.Density  = MatchedRow->CarDensity;
     Out.Velocity = MatchedRow->CarVelocity;
-    
+
     if (SceneID == 1)
     {
         int32 DensityInt = static_cast<int32>(Out.Density);
-        DensityInt = FMath::Max(0, DensityInt - 1);
-        Out.Density = static_cast<ELaneCarDensity>(DensityInt);
-    }
-    else 
-    {
-        int32 DensityInt = static_cast<int32>(Out.Density);
-        DensityInt = FMath::Min(2, DensityInt + 1);
+        DensityInt = FMath::Max(0, DensityInt - 2);
         Out.Density = static_cast<ELaneCarDensity>(DensityInt);
     }
     
@@ -402,13 +400,20 @@ FLaneIndexSpawnConfig UTraffic_AICarManagerComponent::MakeFallbackConfig(
     Cfg.LaneIndex = LaneIdx;
     Cfg.Density  = static_cast<ELaneCarDensity>(D);
     Cfg.Velocity = static_cast<ELaneCarVelocity>(V);
-    
+
     if (SceneID == 1)
     {
         int32 DensityInt = static_cast<int32>(Cfg.Density);
         DensityInt = FMath::Max(0, DensityInt - 2);
         Cfg.Density = static_cast<ELaneCarDensity>(DensityInt);
     }
+    else
+    {
+        int32 DensityInt = static_cast<int32>(Cfg.Density);
+        DensityInt = FMath::Min(2, DensityInt + 1);
+        Cfg.Density = static_cast<ELaneCarDensity>(DensityInt);
+    }
+
     return Cfg;
 }
 
@@ -450,7 +455,7 @@ void UTraffic_AICarManagerComponent::SpawnCar()
             FLaneIndexSpawnConfig Cfg;
             if (!TryGetLaneIndexConfig(Lane, LaneIdx, Cfg))
             {
-                Cfg = MakeFallbackConfig(Lane, LaneIdx);
+                Cfg = MakeFallbackConfig(Lane, LaneIdx, true);
             }
 
             const int32 CarsPerLane = DensityToCarsPerLane(Cfg.Density);
@@ -483,6 +488,36 @@ void UTraffic_AICarManagerComponent::SpawnCar()
                 FActorSpawnParameters Params;
                 Params.SpawnCollisionHandlingOverride =
                     ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+                // ===== occupancy check (before SpawnActor) =====
+                FCollisionQueryParams QParams(SCENE_QUERY_STAT(TrafficSpawnOverlap), false);
+                QParams.bFindInitialOverlaps = true;
+
+                if (AActor* OwnerActor = GetOwner()) QParams.AddIgnoredActor(OwnerActor);
+                QParams.AddIgnoredActor(Lane);
+                if (Lane->Spawner) QParams.AddIgnoredComponent(Lane->Spawner);
+
+                FCollisionObjectQueryParams ObjParams;
+                ObjParams.AddObjectTypesToQuery(ECC_Vehicle);
+                ObjParams.AddObjectTypesToQuery(ECC_Pawn);
+                //ObjParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+                const FVector HalfExtents(300.f, 150.f, 80.f);
+                FVector CheckPos = WorldPos;
+                CheckPos.Z += HalfExtents.Z;
+
+                const bool bOccupied = GetWorld()->OverlapAnyTestByObjectType(
+                    CheckPos,
+                    WorldRot.Quaternion(),
+                    ObjParams,
+                    FCollisionShape::MakeBox(HalfExtents),
+                    QParams
+                );
+
+                if (bOccupied)
+                {
+                    continue;
+                }
 
                 ATraffic_AICar* Car = GetWorld()->SpawnActor<ATraffic_AICar>(
                     CarClass, WorldPos, WorldRot, Params

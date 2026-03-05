@@ -125,6 +125,7 @@ void ATraffic_AICar::UpdateTargetSpeed()
         const float stopDist = (v*v) / (2.f*MaxDecel);
 
         bForceBrake = (stopDist >= (d - SafeDist));
+        bForceBrake = d < SafeDist;
     }
     
     TargetSpeed = FMath::Max(0.f, NewTargetSpeed) * PawnApproachingEffect;
@@ -234,7 +235,6 @@ void ATraffic_AICar::OnFrontSensorEndOverlap(
         UE_LOG(LogTemp, Warning, TEXT("[Sensor] End overlap: %s"), *GetNameSafe(OtherActor));
     }
 
-    // 清理失效指针（比如 actor 被销毁）
     FrontSensorOverlaps.Remove(nullptr);
 
     bHasBlockingActorAhead = FrontSensorOverlaps.Num() > 0;
@@ -265,7 +265,6 @@ void ATraffic_AICar::UpdateBlockingActorAheadFromOverlaps()
         const FVector To = A->GetActorLocation() - MyPos;
         const float ForwardDist = FVector::DotProduct(To, Fwd);
 
-        // 只认“在前方”的（避免侧后方 overlap 也算）
         if (ForwardDist <= 0.f) continue;
 
         if (ForwardDist < BestDist)

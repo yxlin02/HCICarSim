@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -12,6 +12,7 @@
 class ATraffic_AICar;
 class UBoxComponent;
 class UStaticMeshComponent;
+class UTraffic_AICarManagerComponent;
 
 UCLASS()
 class LVL_AGENT_DEMO_API AEnv_RoadLane : public AActor
@@ -101,12 +102,37 @@ protected:
         int32 OtherBodyIndex
     );
 
+    UFUNCTION()
+    void OnLaneBeginOverlap(
+        UPrimitiveComponent* OverlappedComp,
+        AActor* OtherActor,
+        UPrimitiveComponent* OtherComp,
+        int32 OtherBodyIndex,
+        bool bFromSweep,
+        const FHitResult& SweepResult
+    );
+
+    UFUNCTION()
+    void OnLaneEndOverlap(
+        UPrimitiveComponent* OverlappedComp,
+        AActor* OtherActor,
+        UPrimitiveComponent* OtherComp,
+        int32 OtherBodyIndex
+    );
+
 private:
     void UpdateGeometryFromParams();
     void UpdateCarGoState(ATraffic_AICar* Car);
     void OnPhaseChanged(EGlobalTrafficPhase NewPhase);
     
-    UEnv_TrafficLightManagerComponent* TrafficLightManager;
+    UEnv_TrafficLightManagerComponent* TrafficLightManager = nullptr;
+
+    /** 缓存找到的 Traffic Manager，用于设置 CurrentLane */
+    UTraffic_AICarManagerComponent* TrafficManager = nullptr;
+
+    /** 节流计时器：防止 Pawn 在同一帧重复触发 SetCurrentLane */
+    FTimerHandle LaneSetCooldownHandle;
+
     bool IsAICar(AActor* OtherActor) const;
 
 public:

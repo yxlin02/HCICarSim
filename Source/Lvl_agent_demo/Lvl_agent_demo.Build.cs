@@ -19,8 +19,12 @@ public class Lvl_agent_demo : ModuleRules
 			"UMG",
 			"Slate",
             "SlateCore",
-            "ImageWrapper"
-		});
+            "ImageWrapper",
+            "MozaSDKPlugin",
+            "RawInput",
+            "Networking",
+            "Sockets"
+        });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"Lvl_agent_demo",
@@ -32,13 +36,5 @@ public class Lvl_agent_demo : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }
