@@ -254,9 +254,9 @@ int32 UTraffic_AICarManagerComponent::DensityToCarsPerLane(ELaneCarDensity D) co
 {
     switch (D)
     {
-        case ELaneCarDensity::Low:  return 3;
-        case ELaneCarDensity::Mid:  return 8;
-        case ELaneCarDensity::High: return 12;
+        case ELaneCarDensity::Low:  return 1;
+        case ELaneCarDensity::Mid:  return 4;
+        case ELaneCarDensity::High: return 7        ;
         default: return 2;
     }
 }
@@ -266,8 +266,8 @@ float UTraffic_AICarManagerComponent::VelocityToTargetSpeed(ELaneCarVelocity V) 
     switch (V)
     {
         case ELaneCarVelocity::Slow: return 600.f;
-        case ELaneCarVelocity::Mid:  return 1000.f;
-        case ELaneCarVelocity::Fast: return 1500.f;
+        case ELaneCarVelocity::Mid:  return 800.f;
+        case ELaneCarVelocity::Fast: return 1000.f;
         default: return 800.f;
     }
 }
@@ -446,17 +446,24 @@ void UTraffic_AICarManagerComponent::SpawnCar()
         for (int32 LaneIdx = 0; LaneIdx < NumLanes; ++LaneIdx)
         {
             const uint64 Key = MakeLaneIdxKey(Lane, LaneIdx);
+
             if (SpawnedLaneIdxKeys.Contains(Key))
             {
                 continue;
             }
+
             SpawnedLaneIdxKeys.Add(Key);
 
             FLaneIndexSpawnConfig Cfg;
+
             if (!TryGetLaneIndexConfig(Lane, LaneIdx, Cfg))
             {
                 Cfg = MakeFallbackConfig(Lane, LaneIdx, true);
             }
+
+            Cfg.Lane = Lane;
+
+            LaneIndexConfigMap.Add(Key, Cfg);
 
             const int32 CarsPerLane = DensityToCarsPerLane(Cfg.Density);
             const float TargetSpeed = VelocityToTargetSpeed(Cfg.Velocity);
@@ -528,7 +535,7 @@ void UTraffic_AICarManagerComponent::SpawnCar()
 
                 Car->SetCurrentLane(Lane);
                 Car->SetLaneIndex(LaneIdx);
-                Car->SetDesiredSpeed(TargetSpeed);
+                Car->SetInitialDesiredSpeed(TargetSpeed);
             }
         }
     }

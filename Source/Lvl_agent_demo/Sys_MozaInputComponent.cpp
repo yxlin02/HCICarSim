@@ -2,6 +2,10 @@
 #include "Lvl_agent_demoPawn.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "Math/UnrealMathUtility.h"
+#include "RecommendationManager.h"
+
+// 油门/刹车归一化值变化低于此阈值时不重复 Apply，减少无意义调用
+static constexpr float PEDAL_APPLY_THRESHOLD = 0.001f;
 
 USys_MozaInputComponent::USys_MozaInputComponent()
 {
@@ -13,6 +17,35 @@ void USys_MozaInputComponent::BeginPlay()
     Super::BeginPlay();
 
     if (!bEnableMozaInput) { return; }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[Moza Input] World is null"));
+        return;
+    }
+
+    UGameInstance* GI = World->GetGameInstance();
+    if (!GI)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[Moza Input] GameInstance is null"));
+        return;
+    }
+
+    URecommendationManager* RecMgr = GI->GetSubsystem<URecommendationManager>();
+    if (!RecMgr)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[Moza Input] RecommendationManager not found"));
+        return;
+    }
+    else
+    {
+        if (RecMgr->GetCurrentModeID() == 2) 
+        {
+            UE_LOG(LogTemp, Log, TEXT("[Moza Input] Using Automobile mode, Moza disabled."));
+            return;
+        }
+    }
 
     OwnerPawn = Cast<ALvl_agent_demoPawn>(GetOwner());
     if (!OwnerPawn)
@@ -28,7 +61,6 @@ void USys_MozaInputComponent::BeginPlay()
         return;
     }
 
-    // 强制清零，防止任何初始输入
     VehicleMovement->SetHandbrakeInput(false);
     VehicleMovement->SetBrakeInput(0.0f);
     VehicleMovement->SetThrottleInput(0.0f);
@@ -91,9 +123,15 @@ void USys_MozaInputComponent::OnMozaThrottleChanged(float ThrottleValue)
         Norm = (Range > 1.0f) ? FMath::Clamp(ThrottleDelta / Range, 0.0f, 1.0f) : 0.0f;
     }
 
-    CurrentThrottle = Norm < PedalDeadZone ? 0.0f : Norm;
-    UE_LOG(LogTemp, Warning, TEXT("[MozaComp] Throttle raw=%.0f rest=%.0f delta=%.0f norm=%.3f"),
-        ThrottleValue, ThrottleRestRaw, ThrottleDelta, CurrentThrottle);
+    const float NewThrottle = Norm < PedalDeadZone ? 0.0f : Norm;
+
+    // 变化量不超过阈值时跳过，避免每帧无意义的 Apply
+    if (FMath::Abs(NewThrottle - CurrentThrottle) < PEDAL_APPLY_THRESHOLD) { return; }
+
+    UE_LOG(LogTemp, Verbose, TEXT("[MozaComp] Throttle raw=%.0f rest=%.0f delta=%.0f norm=%.3f"),
+        ThrottleValue, ThrottleRestRaw, ThrottleDelta, NewThrottle);
+
+    CurrentThrottle = NewThrottle;
     ApplyThrottleBrake();
 }
 
@@ -112,9 +150,15 @@ void USys_MozaInputComponent::OnMozaBrakeChanged(float BrakeValue)
         Norm = (Range > 1.0f) ? FMath::Clamp(BrakeDelta / Range, 0.0f, 1.0f) : 0.0f;
     }
 
-    CurrentBrake = Norm < PedalDeadZone ? 0.0f : Norm;
-    UE_LOG(LogTemp, Warning, TEXT("[MozaComp] Brake raw=%.0f rest=%.0f delta=%.0f norm=%.3f"),
-        BrakeValue, BrakeRestRaw, BrakeDelta, CurrentBrake);
+    const float NewBrake = Norm < PedalDeadZone ? 0.0f : Norm;
+
+    // 变化量不超过阈值时跳过
+    if (FMath::Abs(NewBrake - CurrentBrake) < PEDAL_APPLY_THRESHOLD) { return; }
+
+    UE_LOG(LogTemp, Verbose, TEXT("[MozaComp] Brake raw=%.0f rest=%.0f delta=%.0f norm=%.3f"),
+        BrakeValue, BrakeRestRaw, BrakeDelta, NewBrake);
+
+    CurrentBrake = NewBrake;
     ApplyThrottleBrake();
 }
 

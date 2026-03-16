@@ -13,6 +13,10 @@ class ATraffic_AICar;
 class UBoxComponent;
 class UStaticMeshComponent;
 class UTraffic_AICarManagerComponent;
+class UTraffic_AutoDriving;
+class ADecisionTrigger;
+class AEnv_RoadLaneTransfer;
+class URecommendationManager;
 
 UCLASS()
 class LVL_AGENT_DEMO_API AEnv_RoadLane : public AActor
@@ -28,6 +32,30 @@ protected:
     virtual void OnConstruction(const FTransform& Transform) override;
     
 public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lane")
+    float LaneLength = 2000.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lane|Decision")
+    TSubclassOf<ADecisionTrigger> DecisionTriggerClass;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lane|Decision")
+    ADecisionTrigger* DecisionTrigger = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lane|Decision")
+    float DecisionTriggerInitRatio = 0.85f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lane|Decision")
+    bool bPlaceDecisionTriggerOnBeginPlay = true;
+
+    UFUNCTION(BlueprintCallable, Category = "Lane|Decision")
+    void SetDecisionTriggerAtDistance(float DistanceAlongLane);
+
+    UFUNCTION(BlueprintCallable, Category = "Lane|Decision")
+    void SetDecisionTriggerAtRatio(float Ratio);
+
+    UFUNCTION(BlueprintCallable, Category = "Lane|Decision")
+    FVector GetPointAlongLane(float DistanceAlongLane) const;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Road")
     float RoadWidth = 1200.f;
 
@@ -62,9 +90,30 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Spawn")
     UBoxComponent* Spawner;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Road|BrakingArea")
+    UBoxComponent* BrakingArea;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Road|TurnArea")
+    UBoxComponent* TurnArea;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Road")
+    UBoxComponent* RoadRangeBox;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TurnTargetLane")
+	AEnv_RoadLane* LeftTurnTargetLane;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TurnTargetLane")
+    AEnv_RoadLane* RightTurnTargetLane;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TurnTargetLane")
+	float SafeTurnDist = 500.f;
+
 protected:
     UPROPERTY(EditAnywhere, Category="Traffic|StopLine")
     float CommitDist = 300.f;
+
+    UPROPERTY(EditAnywhere, Category="Traffic|AICarSpeedTime")
+	float AICarRecoverSpeedTime = 2.f;
 
     UPROPERTY(EditAnywhere, Category="Traffic|StopLine")
     float StopLineOffsetFromEnd = 0.f;
@@ -74,9 +123,6 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Road")
     UBoxComponent* RoadSideRight;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Road|BrakingArea")
-    UBoxComponent* BrakingArea;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Road")
     UStaticMeshComponent* RoadMesh;
@@ -119,6 +165,11 @@ protected:
         UPrimitiveComponent* OtherComp,
         int32 OtherBodyIndex
     );
+    UFUNCTION()
+    void OnAICarEnterLane(AActor* OtherActor);
+
+    UFUNCTION()
+    void DelayedUpdateOverlaps();
 
 private:
     void UpdateGeometryFromParams();
@@ -134,6 +185,16 @@ private:
     FTimerHandle LaneSetCooldownHandle;
 
     bool IsAICar(AActor* OtherActor) const;
+    bool IsPawnInBrakingArea = false;
+
+        // 修复 C4458：声明参数名改为 InAuto
+    void UpdateAutoDrivingGoState(UTraffic_AutoDriving* InAuto);
+
+    UTraffic_AutoDriving* Auto = nullptr;
+
+    UFUNCTION()
+    void OnAnyLoopTransferTriggered(AEnv_RoadLaneTransfer* Transfer, AActor* OtherActor, AEnv_RoadLane* DestLane);
+	URecommendationManager* RecMgr = nullptr;
 
 public:
     UFUNCTION(BlueprintCallable, Category="Road|Lane")

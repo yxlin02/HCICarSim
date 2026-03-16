@@ -99,7 +99,7 @@ void AVibrationSender::SendVibration(int32 Intensity, int32 DurationMs)
 void AVibrationSender::SendStrongVibration()
 {
     // 第一脉冲，立即发送
-    SendVibration(255, 200);
+    SendVibration(255, 1000);
 
     // 第二脉冲，120ms 后重复，不阻塞游戏线程
     if (UWorld* World = GetWorld())

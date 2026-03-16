@@ -14,6 +14,9 @@ USTRUCT(BlueprintType)
 struct LVL_AGENT_DEMO_API FLaneIndexSpawnConfig
 {
     GENERATED_BODY()
+
+    UPROPERTY()
+    AEnv_RoadLane* Lane = nullptr;
     
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 LaneIndex = 0;
@@ -52,6 +55,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Traffic|Spawn")
 	void SetCurrentLane(AEnv_RoadLane* Lane) { CurrentLane = Lane; }
+
+    UFUNCTION(BlueprintCallable, Category = "Traffic|Spawn")
+    AEnv_RoadLane* GetCurrentLane() { return CurrentLane; }
 
     UFUNCTION(BlueprintCallable, Category = "Traffic|Spawn")
     bool GetUsePawnApproachingEffect() { return bUsePawnApproachingEffect; }
@@ -115,4 +121,7 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Traffic|Approach")
     float FalloffPower = 1.5f;
+
+    UPROPERTY()
+    TMap<uint64, FLaneIndexSpawnConfig> LaneIndexConfigMap;
 };

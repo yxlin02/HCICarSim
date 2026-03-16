@@ -1,0 +1,7 @@
+unixtimestamp_ms,gametime_ms,scene_id, block_id, trial_id,current_encode_id,marker
+1773460904103,26852,1,1,1,20104,teleport
+1773460914357,37161,1,1,1,20104,trigger
+1773460926551,49347,1,1,1,20104,reaction_accept
+1773460938528,56200,1,1,2,10101,teleport
+1773460977352,95025,1,1,2,10101,teleport
+1773460987802,105532,1,1,2,10101,trigger

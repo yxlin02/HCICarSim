@@ -10,10 +10,14 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FDecisionEvent);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPauseRate);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
     FOnReactionMake,
     int32, Reactiontype
 );
+
+
 
 class SWindow; 
 
@@ -39,11 +43,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
     float AgentReactionAnimationTime = 1.0f;
 
+    /** Pattern 全部完成后延迟多少秒退出游戏 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Decision")
+    float QuitGameDelay = 10.0f;
+
     UPROPERTY(BlueprintAssignable, Category = "Decision")
     FDecisionEvent OnDecisionTriggered;
 
     UPROPERTY(BlueprintAssignable, Category="Decision")
     FOnReactionMake OnReactionMake;
+
+	UPROPERTY(BlueprintAssignable, Category = "Decision")
+    FOnPauseRate OnPauseRate;
 
     UFUNCTION(BlueprintCallable, Category = "Decision")
     void HandleColliderHit();
@@ -63,7 +74,10 @@ private:
     void TriggerDecision();
 
     void OnAgentReactionEnd();
-    void OnContentSoundEnd();  // ===== 新增：音频播放结束回调 =====
+    void OnContentSoundEnd();
+
+    /** Pattern 结束后触发，10 秒倒计时到期后退出游戏 */
+    void QuitGame();
 
     // ===== 新增：创建独立窗口（可选功能）=====
     void CreateSeparateWindowForWidget(UUserWidget* Widget);
@@ -73,7 +87,10 @@ private:
     FTimerHandle CooldownTimerHandle;
     FTimerHandle RespondTimerHandle;
     FTimerHandle AgentReactionAnimationHandle;
-    FTimerHandle ContentDisplayTimerHandle;  // ===== 新增：用于控制内容显示时长 =====
+    FTimerHandle ContentDisplayTimerHandle;
+
+    /** Pattern 完成后的退出倒计时 handle */
+    FTimerHandle QuitGameTimerHandle;
 
     // ===== 新增：跟踪音频播放 =====
     UPROPERTY()

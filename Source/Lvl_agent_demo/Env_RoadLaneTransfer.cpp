@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/MovementComponent.h"
 #include "Traffic_AICar.h"
+#include "Traffic_AutoDriving.h"
 
 AEnv_RoadLaneTransfer::AEnv_RoadLaneTransfer()
 {
@@ -191,7 +192,7 @@ void AEnv_RoadLaneTransfer::OnLoopTriggerBeginOverlap(
         const float ForwardDist =
             FVector::DotProduct((Car->GetActorLocation() - PawnLoc), PawnFwd);
 
-        if (ForwardDist < -300.f)
+        if (ForwardDist < -300.f || ForwardDist > 5000.f)
             CarsToDestroy.Add(Car);
         else
             CarsToTeleport.Add(Car);
@@ -204,6 +205,11 @@ void AEnv_RoadLaneTransfer::OnLoopTriggerBeginOverlap(
         if (IsValid(Car)) TeleportActorToDestinationLane(Car);
     
     TeleportActorToDestinationLane(OtherActor);
+    /*if (UTraffic_AutoDriving* InAuto = OtherActor->FindComponentByClass<UTraffic_AutoDriving>())
+    {
+        InAuto->SetCurrentLane(TransferDestination);
+		InAuto->bGo = true;
+    }*/
     
     OnLoopTransferTriggered.Broadcast(this, OtherActor, TransferDestination);
 
@@ -244,7 +250,6 @@ void AEnv_RoadLaneTransfer::OnDeadZoneBeginOverlap(
     AI_Car->Destroy();
 }
 
-
 void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
 {
     if (!Actor || !TransferDestination || !RoadSurface || !TransferDestination->RoadSurface)
@@ -252,7 +257,7 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
         return;
     }
 
-    // -------- 0. 关掉相机 Lag（保持你之前的逻辑） --------
+    // -------- 0. 关掉相机 Lag --------
     TArray<USpringArmComponent*> SpringArms;
     Actor->GetComponents(SpringArms);
 
@@ -260,7 +265,7 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
     {
         USpringArmComponent* Arm = nullptr;
         bool bCameraLag = false;
-        bool bRotLag    = false;
+        bool bRotLag = false;
     };
 
     TArray<FSpringArmLagState> SavedStates;
@@ -271,43 +276,35 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
         if (!Arm) continue;
 
         FSpringArmLagState State;
-        State.Arm        = Arm;
+        State.Arm = Arm;
         State.bCameraLag = Arm->bEnableCameraLag;
-        State.bRotLag    = Arm->bEnableCameraRotationLag;
+        State.bRotLag = Arm->bEnableCameraRotationLag;
         SavedStates.Add(State);
 
-        Arm->bEnableCameraLag         = false;
+        Arm->bEnableCameraLag = false;
         Arm->bEnableCameraRotationLag = false;
     }
 
     const FVector WorldLocation = Actor->GetActorLocation();
 
-    // -------- 1. 源路 / 目标路：都用 RoadSurface 的 Transform --------
+    // -------- 1. 源路 / 目标路 --------
     const FTransform SrcLaneXf = RoadSurface->GetComponentTransform();
-    const float SrcHalfLength  = RoadLength * 0.5f;
-    const float SrcHalfWidth   = RoadWidth  * 0.5f;
+    const float SrcHalfLength = RoadLength * 0.5f;
+    const float SrcHalfWidth = RoadWidth * 0.5f;
 
     const FTransform DstLaneXf = TransferDestination->RoadSurface->GetComponentTransform();
-    const float DstHalfLength  = TransferDestination->RoadLength * 0.5f;
-    const float DstHalfWidth   = TransferDestination->RoadWidth  * 0.5f;
+    const float DstHalfLength = TransferDestination->RoadLength * 0.5f;
+    const float DstHalfWidth = TransferDestination->RoadWidth * 0.5f;
 
-    // 世界 -> 源局部
     const FVector LocalOnSrc = SrcLaneXf.InverseTransformPosition(WorldLocation);
 
-    // 直接用“中心为0”的 forward/lateral
-    const float x_src = LocalOnSrc.X;   // [-SrcHalfLength, +SrcHalfLength]
-    const float y_src = LocalOnSrc.Y;   // [-SrcHalfWidth,  +SrcHalfWidth]
+    const float x_src = LocalOnSrc.X;
+    const float y_src = LocalOnSrc.Y;
 
-    // 高度偏移（水平路面OK；有坡建议改成沿Up轴）
     const float HeightOffset = WorldLocation.Z - SrcLaneXf.GetLocation().Z;
 
-    // 目标局部：forward 按比例缩放；lateral 你先保持不变
     float x_dst = x_src * (DstHalfLength / SrcHalfLength);
     float y_dst = y_src;
-
-    // （建议至少保留安全夹紧，避免越界抖动）
-    // x_dst = FMath::Clamp(x_dst, -DstHalfLength, +DstHalfLength);
-    // y_dst = FMath::Clamp(y_dst, -DstHalfWidth,  +DstHalfWidth);
 
     FVector LocalOnDst(x_dst, y_dst, 0.f);
     FVector NewWorldLocation = DstLaneXf.TransformPosition(LocalOnDst);
@@ -316,7 +313,7 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
     UE_LOG(LogTemp, Warning, TEXT("==== Transfer Debug ===="));
     UE_LOG(LogTemp, Warning, TEXT("LocalOnDst=(%.2f, %.2f, %.2f)"), x_dst, y_dst, NewWorldLocation.Z);
 
-    // -------- 4. 朝向：在 lane 局部空间里映射 --------
+    // -------- 4. 朝向 --------
     const FVector WorldForward = Actor->GetActorForwardVector();
     const FVector LocalForwardSrc =
         SrcLaneXf.InverseTransformVectorNoScale(WorldForward);
@@ -326,8 +323,7 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
 
     const FRotator NewWorldRotation = NewWorldForward.Rotation();
 
-    // -------- 5. 速度：同样在 lane 局部空间映射 --------
-    // 先拿到 MovementComponent / VehicleMesh
+    // -------- 5. 速度 --------
     UMovementComponent* MoveComp =
         Actor->FindComponentByClass<UMovementComponent>();
     USkeletalMeshComponent* VehicleMesh =
@@ -335,7 +331,6 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
 
     FVector NewVelocity = FVector::ZeroVector;
 
-    // 计算旧的“世界速度”
     FVector OldVelWorld = FVector::ZeroVector;
     if (VehicleMesh && VehicleMesh->IsSimulatingPhysics())
     {
@@ -348,15 +343,12 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
 
     if (!OldVelWorld.IsNearlyZero())
     {
-        const FVector OldForward = WorldForward;       // 传送前的车头
         const float SpeedAlongForward =
-            FVector::DotProduct(OldVelWorld, OldForward);
-
+            FVector::DotProduct(OldVelWorld, WorldForward);
         NewVelocity = NewWorldForward * SpeedAlongForward;
     }
 
     // -------- 6. 真正 Teleport --------
-
     if (VehicleMesh && VehicleMesh->IsSimulatingPhysics())
     {
         FHitResult Hit;
@@ -375,12 +367,18 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
         Actor->TeleportTo(NewWorldLocation, NewWorldRotation, false, true);
     }
 
-    // 不管有没有物理，都统一更新 MovementComponent（如果存在）
     if (MoveComp)
     {
         MoveComp->Velocity = NewVelocity;
     }
-    
+
+    // -------- 7. 通知 AutoDriving：Teleport 目标 lane，加锁防干扰 --------
+    if (UTraffic_AutoDriving* AutoDriving = Actor->FindComponentByClass<UTraffic_AutoDriving>())
+    {
+        AutoDriving->NotifyTeleportedToLane(TransferDestination);
+        AutoDriving->SetCurrentLane(TransferDestination);
+    }
+
     GetWorld()->GetTimerManager().SetTimer(
         LoopTriggerTimerHandle,
         [this]()
@@ -390,16 +388,4 @@ void AEnv_RoadLaneTransfer::TeleportActorToDestinationLane(AActor* Actor)
         1.0f,
         false
     );
-    
-    // --------------- 6. R ---------------
-//    for (const FSpringArmLagState& State : SavedStates)
-//    {
-//        if (!State.Arm) continue;
-//        State.Arm->bEnableCameraLag         = State.bCameraLag;
-//        State.Arm->bEnableCameraRotationLag = State.bRotLag;
-//    }
-//    
-//    UE_LOG(LogTemp, Warning, TEXT("[Transfer] s=%.1f lane=%d -> (%s)"),
-//           ForwardDist, LaneIdx, *NewWorldLocation.ToString());
-
 }

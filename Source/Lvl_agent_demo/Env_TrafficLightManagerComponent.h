@@ -45,15 +45,23 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Traffic Light")
     EGlobalTrafficPhase CurrentPhase;
 
-    /** 每个 Phase 持续时间（秒） */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Traffic Timing")
-    float StraightDuration = 10.f;   // forwardGo 秒
+    /** 南北/东西直行绿灯持续时间（秒） */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Traffic Timing", meta=(ClampMin="1.0", UIMin="1.0"))
+    float StraightDuration = 10.f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Traffic Timing")
-    float LeftDuration = 5.f;        // leftGo 秒
+    /** 南北/东西左转绿灯持续时间（秒） */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Traffic Timing", meta=(ClampMin="1.0", UIMin="1.0"))
+    float LeftDuration = 5.f;
+
+    /** 全红清场持续时间（秒），用于给路口车辆清场 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Traffic Timing", meta=(ClampMin="0.5", UIMin="0.5"))
+    float AllRedDuration = 3.f;
 
     /** 内部计时器 */
     float PhaseTimeAccumulated;
+
+    /** 全红结束后切换到的下一个正式相位 */
+    EGlobalTrafficPhase PendingPhase;
 
     /** 被管理的所有红绿灯 Actor */
     UPROPERTY()

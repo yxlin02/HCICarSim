@@ -10,6 +10,7 @@ enum class EGlobalTrafficPhase : uint8
     NS_Left_Green           UMETA(DisplayName="NS Left Green, Others Red"),
     EW_Straight_Ped_Green   UMETA(DisplayName="EW Straight+Ped Green, NS Red"),
     EW_Left_Green           UMETA(DisplayName="EW Left Green, Others Red"),
+    All_Red                 UMETA(DisplayName="All Red Clearance"),
 };
 
 UENUM(BlueprintType)

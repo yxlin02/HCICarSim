@@ -130,6 +130,7 @@ void ALvl_agent_demoPawn::Steering(const FInputActionValue& Value)
 {
 	// route the input
 	DoSteering(Value.Get<float>());
+	UE_LOG(LogTemp, Warning, TEXT("Steering Input: %.3f"), Value.Get<float>());
 }
 
 void ALvl_agent_demoPawn::Throttle(const FInputActionValue& Value)

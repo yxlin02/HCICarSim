@@ -1,4 +1,5 @@
 RowName,Sub,Block,Mode,SceneID,PatternID
+S0_B0_M1,0,0,1,1,Training
 S1_B1_M1,1,1,1,1,A
 S1_B2_M1,1,2,1,2,B
 S1_B3_M1,1,3,1,3,C

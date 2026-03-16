@@ -45,13 +45,19 @@ void AEnv_AtmosphereManager::ApplyAtmosphereForScene(int32 SceneID)
 	switch (SceneID)
 	{
 	case 1:
-		Rot.Pitch = -60.f;
+		Rot.Roll = 120.f;
+		Rot.Pitch = -75.f;
+		Rot.Yaw = 60.f;
 		break;
 	case 2:
-		Rot.Pitch = -100.f;
+		Rot.Roll = 120.f;
+		Rot.Pitch = -0.f;
+		Rot.Yaw = 215.f;
 		break;
 	case 3:
-		Rot.Pitch = -15.f;
+		Rot.Roll = 120.f;
+		Rot.Pitch = -30.f;
+		Rot.Yaw = 60.f;
 		break;
 	default:
 		UE_LOG(LogTemp, Warning, TEXT("[AtmosphereManager] Unknown SceneID: %d"), SceneID);

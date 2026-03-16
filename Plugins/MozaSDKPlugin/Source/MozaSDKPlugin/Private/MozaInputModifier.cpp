@@ -19,7 +19,22 @@ static bool IsPedalDisconnected(int16_t val)
     return val == PEDAL_DISCONNECTED_A || val == PEDAL_DISCONNECTED_B;
 }
 
-void UMozaInputBroadcaster::StartPolling() { bIsPolling = true; PollMozaInput(); }
+void UMozaInputBroadcaster::StartPolling()
+{
+    if (bIsPolling) { return; }
+    bIsPolling = true;
+
+    UWorld* World = GetWorld();
+    if (!World) { return; }
+
+    World->GetTimerManager().SetTimer(
+        PollTimerHandle,
+        this,
+        &UMozaInputBroadcaster::PollMozaInput,
+        PollingInterval,
+        /*bLoop=*/true
+    );
+}
 
 void UMozaInputBroadcaster::PollMozaInput()
 {
@@ -52,8 +67,4 @@ void UMozaInputBroadcaster::PollMozaInput()
     if (bBrakePressedNow)                      { OnBrakeTriggered.Broadcast(LastValidBrake); }
     if (!bBrakePressedNow && bBrakeWasPressed) { OnBrakeCompleted.Broadcast(); }
     bBrakeWasPressed = bBrakePressedNow;
-
-    FTimerDelegate TimerDel;
-    TimerDel.BindUObject(this, &UMozaInputBroadcaster::PollMozaInput);
-    GetWorld()->GetTimerManager().SetTimer(PollTimerHandle, TimerDel, PollingInterval, false);
 }

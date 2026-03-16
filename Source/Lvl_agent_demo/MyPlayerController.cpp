@@ -4,6 +4,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 
+#include "Traffic_AutoDriving.h"
 #include "DecisionManagerComponent.h"
 
 void AMyPlayerController::BeginPlay()
@@ -49,6 +50,36 @@ void AMyPlayerController::SetupInputComponent()
                 &AMyPlayerController::OnDecisionReject
             );
         }
+
+        if (IA_LeftTurn)
+        {
+            EIC->BindAction(
+                IA_LeftTurn,
+                ETriggerEvent::Started,
+                this,
+                &AMyPlayerController::TurnLeftAtIntersection
+            );
+        }
+
+        if (IA_RightTurn)
+        {
+            EIC->BindAction(
+                IA_RightTurn,
+                ETriggerEvent::Started,
+                this,
+                &AMyPlayerController::TurnRightAtIntersection
+            );
+        }
+
+        if (IA_CancelTurn)
+        {
+            EIC->BindAction(
+                IA_CancelTurn,
+                ETriggerEvent::Started,
+                this,
+                &AMyPlayerController::CancelTurnAtIntersection
+            );
+        }
     }
 }
 
@@ -76,6 +107,45 @@ void AMyPlayerController::OnDecisionReject(const FInputActionValue&)
             PawnPtr->FindComponentByClass<UDecisionManagerComponent>())
         {
             Manager->OnReject();
+        }
+    }
+}
+
+void AMyPlayerController::TurnLeftAtIntersection(const FInputActionValue&)
+{
+    if (APawn* PawnPtr = GetPawn())
+    {
+        if (UTraffic_AutoDriving* AutoDrivingManager =
+            PawnPtr->FindComponentByClass<UTraffic_AutoDriving>())
+        {
+            if (AutoDrivingManager->bAutoDriveEnabled)
+                AutoDrivingManager->TurnAtIntersection(-1.f);
+        }
+    }
+}
+
+void AMyPlayerController::TurnRightAtIntersection(const FInputActionValue&)
+{
+    if (APawn* PawnPtr = GetPawn())
+    {
+        if (UTraffic_AutoDriving* AutoDrivingManager =
+            PawnPtr->FindComponentByClass<UTraffic_AutoDriving>())
+        {
+            if (AutoDrivingManager->bAutoDriveEnabled)
+                AutoDrivingManager->TurnAtIntersection(1.f);
+        }
+    }
+}
+
+void AMyPlayerController::CancelTurnAtIntersection(const FInputActionValue&)
+{
+    if (APawn* PawnPtr = GetPawn())
+    {
+        if (UTraffic_AutoDriving* AutoDrivingManager =
+            PawnPtr->FindComponentByClass<UTraffic_AutoDriving>())
+        {
+            if (AutoDrivingManager->bAutoDriveEnabled)
+                AutoDrivingManager->TurnAtIntersection(0.f);
         }
     }
 }

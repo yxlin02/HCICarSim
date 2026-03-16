@@ -85,60 +85,41 @@ void AEnv_TrafficLight::ApplyPhase(EGlobalTrafficPhase NewPhase)
 {
     CurrentPhase = NewPhase;
 
-    // 先都关掉 / 置红
     TurnDirectionOff(ForwardRedMID, ForwardYellowMID, ForwardGreenMID);
     TurnDirectionOff(LeftRedMID,   LeftYellowMID,   LeftGreenMID);
 
     switch (NewPhase)
     {
-        // ① 南北直行 + 行人绿，东西全部红
         case EGlobalTrafficPhase::NS_Straight_Ped_Green:
         {
             if (Axis == ETrafficAxis::NorthSouth)
             {
                 if (TrafficRole == ETrafficLightRole::Vehicle)
                 {
-                    // 直行绿灯
                     SetOff(ForwardRedMID);
                     SetOn(ForwardGreenMID);
                     SetOff(LeftGreenMID);
                     SetOn(LeftRedMID);
                 }
-//                else if (TrafficRole == ETrafficLightRole::Pedestrian)
-//                {
-//                    // 行人绿灯
-//                    if (PedRedMID)  SetOff(PedRedMID);
-//                    if (PedGreenMID) SetOn(PedGreenMID);
-//                }
-                // 左转保持红灯，不动
             }
             else
             {
                 SetOn(ForwardRedMID);
                 SetOn(LeftRedMID);
             }
-            // EastWest 轴：全部红灯，什么都不用做
             break;
         }
 
-        // ② 南北左转绿，南北直行/行人红，东西全部红
         case EGlobalTrafficPhase::NS_Left_Green:
         {
             if (Axis == ETrafficAxis::NorthSouth)
             {
                 if (TrafficRole == ETrafficLightRole::Vehicle)
                 {
-                    // 直行刚结束，可以走黄灯过渡到红（可选）
-                    EnterForwardYellow();   // 你已经写好的逻辑
+                    EnterForwardYellow();
                     SetOff(LeftRedMID);
                     SetOn(LeftGreenMID);
                 }
-//                else if (TrafficRole == ETrafficLightRole::Pedestrian)
-//                {
-//                    // 行人变红
-//                    if (PedGreenMID) SetOff(PedGreenMID);
-//                    if (PedRedMID)   SetOn(PedRedMID);
-//                }
             }
             else
             {
@@ -148,7 +129,6 @@ void AEnv_TrafficLight::ApplyPhase(EGlobalTrafficPhase NewPhase)
             break;
         }
 
-        // ③ 东西直行 + 行人绿，南北全部红
         case EGlobalTrafficPhase::EW_Straight_Ped_Green:
         {
             if (Axis == ETrafficAxis::EastWest)
@@ -160,11 +140,6 @@ void AEnv_TrafficLight::ApplyPhase(EGlobalTrafficPhase NewPhase)
                     SetOff(LeftGreenMID);
                     SetOn(LeftRedMID);
                 }
-//                else if (TrafficRole == ETrafficLightRole::Pedestrian)
-//                {
-//                    if (PedRedMID)   SetOff(PedRedMID);
-//                    if (PedGreenMID) SetOn(PedGreenMID);
-//                }
             }
             else
             {
@@ -174,7 +149,6 @@ void AEnv_TrafficLight::ApplyPhase(EGlobalTrafficPhase NewPhase)
             break;
         }
 
-        // ④ 东西左转绿，东西直行/行人红，南北全部红
         case EGlobalTrafficPhase::EW_Left_Green:
         {
             if (Axis == ETrafficAxis::EastWest)
@@ -185,11 +159,6 @@ void AEnv_TrafficLight::ApplyPhase(EGlobalTrafficPhase NewPhase)
                     SetOff(LeftRedMID);
                     SetOn(LeftGreenMID);
                 }
-//                else if (TrafficRole == ETrafficLightRole::Pedestrian)
-//                {
-//                    if (PedGreenMID) SetOff(PedGreenMID);
-//                    if (PedRedMID)   SetOn(PedRedMID);
-//                }
             }
             else
             {
@@ -199,11 +168,18 @@ void AEnv_TrafficLight::ApplyPhase(EGlobalTrafficPhase NewPhase)
             break;
         }
 
+        // 全红清场：所有方向亮红灯，禁止任何车辆进入路口
+        case EGlobalTrafficPhase::All_Red:
+        {
+            SetOn(ForwardRedMID);
+            SetOn(LeftRedMID);
+            break;
+        }
+
         default:
             break;
     }
 }
-
 
 // Foward Yellow - Red
 void AEnv_TrafficLight::EnterForwardYellow()

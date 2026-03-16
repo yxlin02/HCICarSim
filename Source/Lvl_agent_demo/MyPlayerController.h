@@ -27,6 +27,15 @@ protected:
     UFUNCTION()
     void OnDecisionReject(const FInputActionValue& Value);
 
+    UFUNCTION()
+    void TurnLeftAtIntersection(const FInputActionValue& Value);
+
+    UFUNCTION()
+    void TurnRightAtIntersection(const FInputActionValue& Value);
+
+    UFUNCTION()
+    void CancelTurnAtIntersection(const FInputActionValue& Value);
+
     UPROPERTY(EditAnywhere, Category="Decision|Input")
     UInputMappingContext* IMC_Decision;
 
@@ -35,5 +44,14 @@ protected:
 
     UPROPERTY(EditAnywhere, Category="Decision|Input")
     UInputAction* IA_DecisionReject;
+
+    UPROPERTY(EditAnywhere, Category="Decision|Turn")
+    UInputAction* IA_LeftTurn;
+
+    UPROPERTY(EditAnywhere, Category = "Decision|Turn")
+    UInputAction* IA_RightTurn;
+
+    UPROPERTY(EditAnywhere, Category = "Decision|Turn")
+    UInputAction* IA_CancelTurn;
 	
 };

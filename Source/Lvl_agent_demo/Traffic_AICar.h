@@ -7,12 +7,7 @@
 #include "Traffic_AICar.generated.h"
 
 class AEnv_RoadLane;
-class UBoxComponent;
 class UChaosWheeledVehicleMovementComponent;
-
-/**
- * 简单前向跟车 / 红灯响应的 AI 车
- */
 
 UENUM(BlueprintType)
 enum class EAICarTypes : uint8
@@ -25,7 +20,7 @@ UCLASS()
 class LVL_AGENT_DEMO_API ATraffic_AICar : public ALvl_agent_demoSportsCar
 {
     GENERATED_BODY()
-    
+
 public:
     ATraffic_AICar();
 
@@ -34,53 +29,78 @@ public:
 
 protected:
 
-    /** 前向感知盒，用来检测前车 / Pawn / 障碍物 */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AI|Sensor")
-    UBoxComponent* FrontSensorBox;
-    
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AI|Sensor")
-    float SafeDist = 2000.f;
+    /** 期望与前车保持的最小间距（cm） */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor", meta = (ClampMin = "50.0"))
+    float SafeDist = 300.f;
 
-    /** GameMode / TrafficManager 希望这辆车跑到的理想速度（cm/s） */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AI|Speed")
+    /** Chaos 车辆实际最大减速度（cm/s²），用于计算制动距离，请根据实际车辆物理调整 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor", meta = (ClampMin = "100.0"))
+    float MaxDecel = 800.f;
+
+    /** 制动距离安全系数，越大越保守 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor", meta = (ClampMin = "1.0", ClampMax = "3.0"))
+    float BrakeSafetyMargin = 1.5f;
+
+    /**
+     * Raycast 最远探测距离（cm）。
+     * 车速越快时实际所需制动距离越长，建议设置为 DesiredSpeed 对应制动距离的 2~3 倍。
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor", meta = (ClampMin = "100.0"))
+    float RaycastMaxDistance = 2000.f;
+
+    /**
+     * 侧向扫射的射线数（总条数，含中心线）。
+     * 奇数效果最好（中心 + 左右对称），建议 3 或 5。
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor", meta = (ClampMin = "1", ClampMax = "9"))
+    int32 RaycastCount = 3;
+
+    /**
+     * 侧向扫射最大半角（度）。
+     * 例如 15°：左 -15°、中 0°、右 +15°。
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor", meta = (ClampMin = "0.0", ClampMax = "60.0"))
+    float RaycastHalfAngleDeg = 10.f;
+
+    /** Raycast 起点相对于 Actor 根部的偏移（cm），用于避免射线从车身内部发出 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Sensor")
+    FVector RaycastOriginOffset = FVector(200.f, 0.f, 50.f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Speed")
     float DesiredSpeed = 800.f;
 
-    /** 在当前环境约束下允许的目标速度（cm/s），= min(DesiredSpeed, 安全速度) */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AI|Speed")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Speed")
     float TargetSpeed = 0.f;
 
-    /** 当前实际执行中的线速度（cm/s），逐渐逼近 TargetSpeed */
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AI|Speed")
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Speed")
     float CurrentSpeed = 0.f;
 
-    /** 从当前速度渐变到 TargetSpeed 所需的大致时间（秒） */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="AI|Speed", meta=(ClampMin="0.01"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AI|Speed", meta = (ClampMin = "0.01"))
     float SpeedChangeTime = 1.0f;
 
 public:
 
-    /** 设置理想速度，GameMode 或 TrafficManager 可以定期调用 */
-    UFUNCTION(BlueprintCallable, Category="AI|Speed")
+    UFUNCTION(BlueprintCallable, Category = "AI|Speed")
     void SetDesiredSpeed(float NewDesiredSpeed);
 
-    UFUNCTION(BlueprintPure, Category="AI|Speed")
+    UFUNCTION(BlueprintPure, Category = "AI|Speed")
     float GetDesiredSpeed() const { return DesiredSpeed; }
 
-    UFUNCTION(BlueprintPure, Category="AI|Speed")
+    UFUNCTION(BlueprintPure, Category = "AI|Speed")
     float GetTargetSpeed() const { return TargetSpeed; }
 
-    UFUNCTION(BlueprintPure, Category="AI|Speed")
+    UFUNCTION(BlueprintPure, Category = "AI|Speed")
     float GetCurrentSpeed() const { return CurrentSpeed; }
-    
+
     UFUNCTION()
     void SetShouldGoIntersection(bool bShouldGo);
-    
-    UPROPERTY(EditAnywhere, Category="AI|Axis")
+
+    UPROPERTY(EditAnywhere, Category = "AI|Axis")
     AEnv_RoadLane* CurrentDrivingLane = nullptr;
-    
-    UPROPERTY(EditAnywhere, Category="AI|Axis")
+
+    UPROPERTY(EditAnywhere, Category = "AI|Axis")
     int32 CurrentDrivingLaneIndex = INDEX_NONE;
-    
+
     void SetCurrentLane(AEnv_RoadLane* Lane);
     void SetLaneIndex(int32 LaneIndex);
     int32 GetLaneIndex() const;
@@ -88,57 +108,43 @@ public:
 
     void SetPawnApproachingEffect(float Effect);
 
+    UFUNCTION()
+    void SetInitialDesiredSpeed(float Speed) { DesiredSpeed = Speed; InitialDesiredSpeed = Speed; }
+
+    UFUNCTION()
+    float GetInitialDesiredSpeed() const { return InitialDesiredSpeed; }
+
 protected:
-    /** 根据前方是否有车 / 红灯状态更新 TargetSpeed（不做插值） */
     UFUNCTION()
     void UpdateTargetSpeed();
 
-    /** 让 CurrentSpeed 在 SpeedChangeTime 内平滑逼近 TargetSpeed */
     UFUNCTION()
     void UpdateSpeed(float DeltaTime);
 
-    /** 把 CurrentSpeed 转换为油门 / 刹车输入，驱动 Chaos 车辆组件 */
     UFUNCTION()
     void ApplySpeedToVehicle();
 
-    /** 前方感知盒开始 overlap 的回调 */
-    UFUNCTION()
-    void OnFrontSensorBeginOverlap(
-        UPrimitiveComponent* OverlappedComp,
-        AActor* OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex,
-        bool bFromSweep,
-        const FHitResult& SweepResult
-    );
+    /** 每帧执行 Raycast，更新 bHasBlockingActorAhead / BlockingActorAhead / RaycastHitDistance */
+    void UpdateRaycast();
 
-    /** 前方感知盒结束 overlap 的回调 */
-    UFUNCTION()
-    void OnFrontSensorEndOverlap(
-        UPrimitiveComponent* OverlappedComp,
-        AActor* OtherActor,
-        UPrimitiveComponent* OtherComp,
-        int32 OtherBodyIndex
-    );
+    bool IsDesignatedBlockingActor(AActor* OtherActor) const;
 
-    float PawnApproachingEffect = 1.0;
+    float PawnApproachingEffect = 1.0f;
+    float InitialDesiredSpeed = DesiredSpeed;
+    bool bHardStop = false;
 
 private:
-    /** 是否前方存在潜在阻挡（车 / Pawn / 障碍物） */
     bool bHasBlockingActorAhead = false;
     bool bForceBrake = false;
 
-    /** 前方最近的阻挡 Actor（后面可以用来算车距 / 前车速度） */
+    /** 最近命中的阻挡 Actor */
     TWeakObjectPtr<AActor> BlockingActorAhead;
 
-    /** 缓存 Chaos 车辆 movement 组件 */
+    /** 最近一次 Raycast 命中的前向距离（cm） */
+    float RaycastHitDistance = TNumericLimits<float>::Max();
+
     UPROPERTY()
     UChaosWheeledVehicleMovementComponent* CachedVehicleMovement = nullptr;
-    
-    UPROPERTY()
-    TSet<TWeakObjectPtr<AActor>> FrontSensorOverlaps;
-    
-    bool IsDesignatedBlockingActor(AActor* OtherActor) const;
-    void UpdateBlockingActorAheadFromOverlaps();
+
     bool bShouldGoIntersection = true;
 };

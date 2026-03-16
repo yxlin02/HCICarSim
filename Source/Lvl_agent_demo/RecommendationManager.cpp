@@ -9,7 +9,9 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Engine/DataTable.h"
-#include "VibrationSender.h"   // ← 新增
+#include "VibrationSender.h"
+#include "Traffic_AutoDriving.h"
+#include "Components/AudioComponent.h"
 
 // ──────────────────────── 内部工具函数 ───────────────────────────────────────
 /** 在当前 World 中找到第一个 AVibrationSender 实例（如果有的话）*/
@@ -21,35 +23,36 @@ static AVibrationSender* FindVibrationSender(UWorld* World)
     return (Found.Num() > 0) ? Cast<AVibrationSender>(Found[0]) : nullptr;
 }
 
-// ── 其余函数保持不变，仅展示修改部分 ────────────────────────────────────────
+// ====================================================================================================
+// Initialization
+// ====================================================================================================
 
 void URecommendationManager::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    // RecommendationTable = LoadObject<UDataTable>(...);
     if (UGameInstance* GI = GetGameInstance())
     {
         if (UAgentGameInstance* AgentGI = Cast<UAgentGameInstance>(GI))
         {
             if (!RecommendationTable)
             {
-                switch(AgentGI->CurrentExperimentType)
+                switch (AgentGI->CurrentExperimentType)
                 {
-                    case EExperimentType::Default:
-                        RecommendationTable = AgentGI->DefaultRecommendationTable;
-                        break;
-                    case EExperimentType::Personalize:
-                        RecommendationTable = AgentGI->PZRecommendationTable;
-                        break;
-                    case EExperimentType::Personalify:
-                        RecommendationTable = AgentGI->PFRecommendationTable;
-                        break;
-                    default:
-                        RecommendationTable = AgentGI->DefaultRecommendationTable;
-                        break;
+                case EExperimentType::Default:
+                    RecommendationTable = AgentGI->DefaultRecommendationTable;
+                    break;
+                case EExperimentType::Personalize:
+                    RecommendationTable = AgentGI->PZRecommendationTable;
+                    break;
+                case EExperimentType::Personalify:
+                    RecommendationTable = AgentGI->PFRecommendationTable;
+                    break;
+                default:
+                    RecommendationTable = AgentGI->DefaultRecommendationTable;
+                    break;
                 }
-                
+
                 if (!RecommendationTable)
                 {
                     UE_LOG(LogTemp, Error, TEXT("[RecommendationManager] RecommendationTable not assigned."));
@@ -63,21 +66,21 @@ void URecommendationManager::Initialize(FSubsystemCollectionBase& Collection)
                 RecommendationWidgetClass = AgentGI->RecommendationWidgetClass;
                 UE_LOG(LogTemp, Display, TEXT("[Game Instance] UI read."));
             }
-            
+
             if (!PhaseBlockTable)
             {
                 PhaseBlockTable = AgentGI->PhaseBlockTable;
                 UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] PhaseBlockTable read from GI."));
                 if (!PhaseBlockTable) UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] PhaseBlockTable not assigned."));
             }
-            
+
             if (!RecommendationPatternTable)
             {
                 RecommendationPatternTable = AgentGI->RecommendationPatternTable;
                 UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] RecommendationPatternTable read from GI."));
                 if (!RecommendationPatternTable) UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] RecommendationPatternTable not assigned."));
             }
-            
+
             if (SubNum < 0 || Block < 0)
             {
                 SubNum = AgentGI->SubNum;
@@ -87,26 +90,21 @@ void URecommendationManager::Initialize(FSubsystemCollectionBase& Collection)
             }
         }
     }
-    
-    
+
     if (RecommendationWidgetClass)
     {
-        // UE_LOG(LogTemp, Display, TEXT("[Game Instance] UI 1."));
         UWorld* World = GetWorld();
         if (World)
         {
             RecommendationWidget = CreateWidget<URecommendationWidget>(World, RecommendationWidgetClass);
-            // UE_LOG(LogTemp, Display, TEXT("[Game Instance] UI 2."));
         }
     }
-    
+
     if (InitializeFromDesignTable())
     {
         UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] Made initialize designated table."))
-        // UpdateDesignatedRowToCurrentRow();
     }
     else {
-        // UpdateRandomRowToCurrentRow();
         UE_LOG(LogTemp, Error, TEXT("[RecommendationManager] Failed to initialize designated table."))
     }
 }
@@ -122,8 +120,6 @@ bool URecommendationManager::InitializeFromDesignTable()
         UE_LOG(LogTemp, Error, TEXT("[RecommendationManager] PhaseBlockTable is not set."));
         return false;
     }
-
-    int32 ModeAsInt = static_cast<int32>(Mode);
 
     FExperimentBlockDesignRow* MatchedRow = nullptr;
 
@@ -148,7 +144,7 @@ bool URecommendationManager::InitializeFromDesignTable()
             SubNum, ModeAsInt, SceneID);
         return false;
     }
-    
+
     ModeAsInt = MatchedRow->Mode;
     SceneID = MatchedRow->SceneID;
 
@@ -214,7 +210,7 @@ bool URecommendationManager::BuildPatternRows()
     UE_LOG(LogTemp, Display,
         TEXT("[RecommendationManager] Loaded %d pattern rows for PatternID=%s"),
         ActivePatternRows.Num(), *ActivePatternID.ToString());
-    
+
     return true;
 }
 
@@ -237,10 +233,8 @@ bool URecommendationManager::SetCurrentRow(int32 EncodedID)
         return false;
     }
 
-    // 由 EncodedID 构造 RowName，比如 10101 -> "10101"
     const FName RowName(*FString::FromInt(EncodedID));
 
-    // 先在 DataTable 里查一遍，确认这个行存在
     FRecommendationTypes* FoundRow =
         RecommendationTable->FindRow<FRecommendationTypes>(
             RowName,
@@ -255,15 +249,15 @@ bool URecommendationManager::SetCurrentRow(int32 EncodedID)
         return false;
     }
 
-    LastEncodedID    = CurrentEncodedID;
+    LastEncodedID = CurrentEncodedID;
     CurrentEncodedID = EncodedID;
-    CurrentRow       = FoundRow;
+    CurrentRow = FoundRow;
 
     UE_LOG(LogTemp, Display,
         TEXT("SetCurrentRow: Now EncodedID=%d (RowName=%s)"),
         CurrentEncodedID,
         *RowName.ToString());
-    
+
     RecommendationIndex++;
 
     return true;
@@ -274,31 +268,26 @@ bool URecommendationManager::UpdateRandomRowToCurrentRow()
     int32 RandomCategory = 0;
     int32 RandomSubcategory = 0;
     FRecommendationTypes RandomRecommendation;
-    
-    // 1. 随机一个 (Category, SubCategory)
+
     if (!GetRandomCategoryAndSubCategory(RandomCategory, RandomSubcategory))
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to get random Category/SubCategory"));
         return false;
     }
 
-    // 2. 在这个 Category/SubCategory 里随机一个 Item
     if (!GetRandomItem(RandomCategory, RandomSubcategory, RandomRecommendation))
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to get random Item for Category %d SubCategory %d"),
-               RandomCategory, RandomSubcategory);
+            RandomCategory, RandomSubcategory);
         return false;
     }
 
-    // 3. 根据 Category/SubCategory/Item 计算出编码 ID
     int32 EncodedID = MakeRecommendationID(
         RandomRecommendation.Category,
         RandomRecommendation.SubCategory,
         RandomRecommendation.Item
     );
-    
-    // EncodedID = 10401;
-    
+
     UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] Random row updated to current row"));
     return SetCurrentRow(EncodedID);
 }
@@ -308,18 +297,18 @@ bool URecommendationManager::UpdateDesignatedRowToCurrentRow()
     int32 DesignatedCategory = 0;
     int32 DesignatedSubcategory = 0;
     FRecommendationTypes DesignatedRecommendation;
-    
+
     if (bHasPendingDelayedRecommendation)
     {
         bHasPendingDelayedRecommendation = false;
 
         UE_LOG(LogTemp, Display,
-               TEXT("[RecommendationManager] Consuming delayed recommendation at index=%d"),
-               CurrentDesignatedIndex);
+            TEXT("[RecommendationManager] Consuming delayed recommendation at index=%d"),
+            CurrentDesignatedIndex);
 
         return true;
     }
-    
+
     if (ActivePatternRows.Num() == 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("[RecommendationManager] No ActivePatternRows to update."));
@@ -336,29 +325,29 @@ bool URecommendationManager::UpdateDesignatedRowToCurrentRow()
 
     CurrentDesignatedIndex = NextIndex;
     const FRecommendationPatternRow& Row = ActivePatternRows[CurrentDesignatedIndex];
-    
+
     DesignatedCategory = Row.Category;
     DesignatedSubcategory = Row.Subcategory;
-    
+
     if (!GetRandomItem(DesignatedCategory, DesignatedSubcategory, DesignatedRecommendation))
     {
         UE_LOG(LogTemp, Warning, TEXT("Failed to get random Item for Category %d SubCategory %d"),
-               DesignatedCategory, DesignatedSubcategory);
+            DesignatedCategory, DesignatedSubcategory);
         return false;
     }
-    
+
     int32 EncodedID = MakeRecommendationID(
-                                           DesignatedRecommendation.Category,
-                                           DesignatedRecommendation.SubCategory,
-                                           DesignatedRecommendation.Item
+        DesignatedRecommendation.Category,
+        DesignatedRecommendation.SubCategory,
+        DesignatedRecommendation.Item
     );
 
     UE_LOG(LogTemp, Display,
         TEXT("[RecommendationManager] Switched to OrderIndex=%d, EncodeID=%d (Cat=%d Sub=%d Delay=%s)"),
         Row.OrderIndex, EncodedID, Row.Category, Row.Subcategory, Row.bDelay ? TEXT("true") : TEXT("false"));
-    
+
     bDelayCurrentRecommendation = Row.bDelay;
-    
+
     if (!SetCurrentRow(EncodedID))
     {
         UE_LOG(LogTemp, Warning, TEXT("[RecommendationManager] SetCurrentRow failed for EncodedID=%d"), EncodedID);
@@ -370,15 +359,25 @@ bool URecommendationManager::UpdateDesignatedRowToCurrentRow()
         bHasPendingDelayedRecommendation = true;
 
         UE_LOG(LogTemp, Display,
-               TEXT("[RecommendationManager] Delayed recommendation prepared (index=%d). Will display on next call."),
-               CurrentDesignatedIndex);
+            TEXT("[RecommendationManager] Delayed recommendation prepared (index=%d). Will display on next call."),
+            CurrentDesignatedIndex);
+
+        return true;
+    }
+
+    if (!Row.bDelay && SceneID == 1)
+    {
+        bHasPendingDelayedRecommendation = true;
+
+        UE_LOG(LogTemp, Display,
+            TEXT("[RecommendationManager] Delayed recommendation prepared (index=%d). Will display on next call."),
+            CurrentDesignatedIndex);
 
         return true;
     }
 
     return true;
 }
-
 
 // random number generator
 bool URecommendationManager::GetRandomItem(
@@ -450,21 +449,20 @@ bool URecommendationManager::GetRandomCategoryAndSubCategory(
 
     int32 RandomIndex = FMath::RandRange(0, PairArray.Num() - 1);
 
-    OutCategory    = PairArray[RandomIndex].X;
+    OutCategory = PairArray[RandomIndex].X;
     OutSubCategory = PairArray[RandomIndex].Y;
 
     return true;
 }
 
-// utils
 int32 URecommendationManager::MakeRecommendationID(int32 Category, int32 SubCategory, int32 Item) const
 {
-    constexpr int32 CATEGORY_MULTIPLIER    = 10000;
+    constexpr int32 CATEGORY_MULTIPLIER = 10000;
     constexpr int32 SUBCATEGORY_MULTIPLIER = 100;
-    
+
     return Category * CATEGORY_MULTIPLIER
-         + SubCategory * SUBCATEGORY_MULTIPLIER
-         + Item;
+        + SubCategory * SUBCATEGORY_MULTIPLIER
+        + Item;
 }
 
 void URecommendationManager::DecomposeRecommendationID(
@@ -473,12 +471,12 @@ void URecommendationManager::DecomposeRecommendationID(
     int32& OutSubCategory,
     int32& OutItem) const
 {
-    constexpr int32 CATEGORY_MULTIPLIER    = 10000;
+    constexpr int32 CATEGORY_MULTIPLIER = 10000;
     constexpr int32 SUBCATEGORY_MULTIPLIER = 100;
 
-    OutCategory    = EncodedID / CATEGORY_MULTIPLIER;
+    OutCategory = EncodedID / CATEGORY_MULTIPLIER;
     OutSubCategory = (EncodedID % CATEGORY_MULTIPLIER) / SUBCATEGORY_MULTIPLIER;
-    OutItem        = EncodedID % SUBCATEGORY_MULTIPLIER;
+    OutItem = EncodedID % SUBCATEGORY_MULTIPLIER;
 }
 
 // ====================================================================================================
@@ -492,8 +490,14 @@ void URecommendationManager::DisplayRecommendation()
     {
         return;
     }
-    
+
     FRecommendationTypes& Entry = *CurrentRow;
+
+    if (!CurrentRow)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[Rec] CurrentRow is null"));
+        return;
+    }
 
     // 1. Update UI: Image + Text
     if (RecommendationWidget && !Entry.Recommendation_Image.IsNull())
@@ -504,15 +508,38 @@ void URecommendationManager::DisplayRecommendation()
         }
     }
 
-    // 2. Play Sound
+    // ★ 修改：强制停掉之前播放的共同通道声音
+    if (SharedAudioComponent && SharedAudioComponent->IsPlaying())
+    {
+        SharedAudioComponent->Stop();
+    }
+
+    float AudioDuration = 0.0f;
     if (Entry.Recommendation_Sound.IsValid() || !Entry.Recommendation_Sound.ToSoftObjectPath().IsNull())
     {
         USoundBase* Sound = Entry.Recommendation_Sound.LoadSynchronous();
         if (Sound)
         {
-            UGameplayStatics::PlaySound2D(World, Sound);
+            // ★ 修改：使用 CreateSound2D 才能保证它真正发声且不会马上被销毁
+            // 每次把旧的干掉，创建一个新的附着在通道槽位上
+            SharedAudioComponent = UGameplayStatics::CreateSound2D(World, Sound, 1.f, 1.f, 0.f, nullptr, false, false);
+            
+            if (SharedAudioComponent)
+            {
+                // 重要：禁止它播放完自动销毁，否则指针悬空断言
+                SharedAudioComponent->bAutoDestroy = false;
+                SharedAudioComponent->Play();
+                
+                AudioDuration = Sound->GetDuration();
+                UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] Playing Recommendation via Shared Channel."));
+            }
         }
     }
+
+    // 更新指标记录
+    CurrentRecommendationAudioDuration = AudioDuration;
+    CurrentRecommendationStartTime = World->GetTimeSeconds();
+    OnRecommendationAudioStarted.Broadcast(AudioDuration);
 
     // 3. Vibration — 触发 ESP 板振动
     if (Entry.Recommendation_Haptic)
@@ -537,12 +564,24 @@ void URecommendationManager::DisplayReaction()
     {
         return;
     }
-    
+
+    // ===== 强制切断之前在放的声音（必定是 Recommendation Audio） =====
+    if (SharedAudioComponent)
+    {
+        SharedAudioComponent->Stop();
+    }
+    // ===== 结束增强保险 =====
+
     FRecommendationTypes& Entry = *CurrentRow;
 
-    // 1. Update UI: Image + Text
+    if (!CurrentRow)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[RecMgr] CurrentRow is null"));
+        return;
+	}
+
     if (!RecommendationWidget) return;
-    
+
     TSoftObjectPtr<UTexture2D> ReactionImage;
     TSoftObjectPtr<USoundBase> ReactionSound;
     bool bTriggerHaptic = false;
@@ -551,30 +590,29 @@ void URecommendationManager::DisplayReaction()
     switch (CurrentDecision)
     {
     case EDecisionTypes::Accept:
-        ReactionImage  = Entry.Reaction_Accept_Image;
-        ReactionSound  = Entry.Reaction_Accept_Sound;
+        ReactionImage = Entry.Reaction_Accept_Image;
+        ReactionSound = Entry.Reaction_Accept_Sound;
         bTriggerHaptic = Entry.Reaction_Accept_Haptic;
         break;
 
     case EDecisionTypes::Decline:
     case EDecisionTypes::Ignore:
     default:
-        ReactionImage  = Entry.Reaction_Decline_Image;
-        ReactionSound  = Entry.Reaction_Decline_Sound;
+        ReactionImage = Entry.Reaction_Decline_Image;
+        ReactionSound = Entry.Reaction_Decline_Sound;
         bTriggerHaptic = Entry.Reaction_Decline_Haptic;
         break;
     }
 
-    // 3. Display image
     if (!ReactionImage.IsNull())
     {
         if (UTexture2D* Image = ReactionImage.LoadSynchronous())
         {
-            RecommendationWidget->ShowReaction(FText(),Image);
+            RecommendationWidget->ShowReaction(FText(), Image);
         }
     }
 
-    // 4. Play sound
+    // 4. Reaction 是系统音效，不占用主管对话通道，直接 PlaySound2D 即可
     if (!ReactionSound.IsNull())
     {
         if (USoundBase* Sound = ReactionSound.LoadSynchronous())
@@ -583,14 +621,11 @@ void URecommendationManager::DisplayReaction()
         }
     }
 
-    // 5. Vibration
     if (bTriggerHaptic)
     {
         UE_LOG(LogTemp, Log, TEXT("Haptics triggered for reaction."));
     }
-
 }
-
 
 void URecommendationManager::DisplayContent()
 {
@@ -599,8 +634,36 @@ void URecommendationManager::DisplayContent()
     {
         return;
     }
-    
+
     FRecommendationTypes& Entry = *CurrentRow;
+
+    int32 Category = Entry.Category;
+    int32 SubCategory = Entry.SubCategory;
+    int32 Item = Entry.Item;
+
+    if (Category == 1 && (SubCategory == 3 || SubCategory == 4))
+    {
+        if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0))
+        {
+            UTraffic_AutoDriving* AutoDriving = PlayerPawn->FindComponentByClass<UTraffic_AutoDriving>();
+            if (AutoDriving && AutoDriving->bAutoDriveEnabled)
+            {
+                AutoDriving->bUseSwitchLane = true;
+            }
+        }
+    }
+    else if (Category == 1 && (SubCategory == 1 || SubCategory == 2 || SubCategory == 5) && (Item == 1 || Item == 2))
+    {
+        if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0))
+        {
+            UTraffic_AutoDriving* AutoDriving = PlayerPawn->FindComponentByClass<UTraffic_AutoDriving>();
+            if (AutoDriving && AutoDriving->bAutoDriveEnabled)
+            {
+                AutoDriving->bUseSwitchLane = true;
+                AutoDriving->TurnAtIntersection(1.f);
+            }
+        }
+    }
 
     // 1. Update UI: Image + Text
     if (RecommendationWidget && !Entry.Content_Image.IsNull())
@@ -611,27 +674,26 @@ void URecommendationManager::DisplayContent()
         }
     }
 
-    // ===== 修改：使用 SpawnSound2D 并保存音频组件引用 =====
-    // 2. Play Sound
+    // ★ 修改：强制干掉通道里的 Recommendation/旧 Content 声音
+    if (SharedAudioComponent && SharedAudioComponent->IsPlaying())
+    {
+        SharedAudioComponent->Stop();
+    }
+
     if (Entry.Content_Sound.IsValid() || !Entry.Content_Sound.ToSoftObjectPath().IsNull())
     {
         USoundBase* Sound = Entry.Content_Sound.LoadSynchronous();
         if (Sound)
         {
-            // 使用 SpawnSound2D 获取音频组件引用，而不是直接 PlaySound2D
-            // 这样可以在外部控制音频（暂停/停止等）
-            LastContentAudioComponent = UGameplayStatics::SpawnSound2D(World, Sound);
+            // ★ 修改：同样用 CreateSound2D 生产安全合法的发声组件接管指针
+            SharedAudioComponent = UGameplayStatics::CreateSound2D(World, Sound, 1.f, 1.f, 0.f, nullptr, false, false);
             
-            if (LastContentAudioComponent)
+            if (SharedAudioComponent)
             {
-                UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] Content audio component created and playing"));
+                SharedAudioComponent->bAutoDestroy = false;
+                SharedAudioComponent->Play();
+                UE_LOG(LogTemp, Display, TEXT("[RecommendationManager] Playing Content via Shared Channel."));
             }
         }
     }
-    else
-    {
-        // 如果没有声音，清空引用
-        LastContentAudioComponent = nullptr;
-    }
-    // ===== 修改结束 =====
 }

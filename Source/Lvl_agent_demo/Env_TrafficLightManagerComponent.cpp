@@ -8,6 +8,7 @@ UEnv_TrafficLightManagerComponent::UEnv_TrafficLightManagerComponent()
 
     PhaseTimeAccumulated = 0.f;
     CurrentPhase = EGlobalTrafficPhase::NS_Straight_Ped_Green;
+    PendingPhase = EGlobalTrafficPhase::NS_Left_Green;
 }
 
 void UEnv_TrafficLightManagerComponent::BeginPlay()
@@ -80,25 +81,34 @@ void UEnv_TrafficLightManagerComponent::ForceSetPhase(EGlobalTrafficPhase NewPha
 
 void UEnv_TrafficLightManagerComponent::SwitchPhase()
 {
-    switch (CurrentPhase)
+    if (CurrentPhase == EGlobalTrafficPhase::All_Red)
     {
-        case EGlobalTrafficPhase::NS_Straight_Ped_Green:
-            CurrentPhase = EGlobalTrafficPhase::NS_Left_Green;
-            break;
-
-        case EGlobalTrafficPhase::NS_Left_Green:
-            CurrentPhase = EGlobalTrafficPhase::EW_Straight_Ped_Green;
-            break;
-
-        case EGlobalTrafficPhase::EW_Straight_Ped_Green:
-            CurrentPhase = EGlobalTrafficPhase::EW_Left_Green;
-            break;
-
-        case EGlobalTrafficPhase::EW_Left_Green:
-        default:
-            CurrentPhase = EGlobalTrafficPhase::NS_Straight_Ped_Green;
-            break;
+        // 全红期结束 → 切换到之前预定的下一个正式相位
+        CurrentPhase = PendingPhase;
     }
+    else
+    {
+        // 正式相位结束 → 先计算出下一个正式相位，存入 PendingPhase，然后进入全红
+        switch (CurrentPhase)
+        {
+            case EGlobalTrafficPhase::NS_Straight_Ped_Green:
+                PendingPhase = EGlobalTrafficPhase::NS_Left_Green;
+                break;
+            case EGlobalTrafficPhase::NS_Left_Green:
+                PendingPhase = EGlobalTrafficPhase::EW_Straight_Ped_Green;
+                break;
+            case EGlobalTrafficPhase::EW_Straight_Ped_Green:
+                PendingPhase = EGlobalTrafficPhase::EW_Left_Green;
+                break;
+            case EGlobalTrafficPhase::EW_Left_Green:
+            default:
+                PendingPhase = EGlobalTrafficPhase::NS_Straight_Ped_Green;
+                break;
+        }
+
+        CurrentPhase = EGlobalTrafficPhase::All_Red;
+    }
+
     OnTrafficPhaseChanged.Broadcast(CurrentPhase);
 }
 
@@ -128,6 +138,9 @@ float UEnv_TrafficLightManagerComponent::GetCurrentPhaseDuration() const
         case EGlobalTrafficPhase::NS_Left_Green:
         case EGlobalTrafficPhase::EW_Left_Green:
             return LeftDuration;
+
+        case EGlobalTrafficPhase::All_Red:
+            return AllRedDuration;
 
         default:
             return StraightDuration;
