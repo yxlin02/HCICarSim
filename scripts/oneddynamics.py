@@ -65,9 +65,9 @@ def compute_drive_u(
 
     # mode → auto tends to accept, manual tends to reject
     if mode == "auto":
-        u += gamma_mode
-    else:
         u -= gamma_mode
+    else:
+        u += gamma_mode
 
     return u
 
