@@ -95,7 +95,6 @@ def compute_accept_reject_drives(
 
     # accept drive parameters
     b_x=0.0,
-    alpha_prior=1.2,
     alpha_coherence=1.2,
     alpha_intensity=0.7,
     alpha_ci=0.4,
@@ -107,7 +106,6 @@ def compute_accept_reject_drives(
     beta_density=0.8,
     beta_time_pressure=0.8,
     beta_low_coherence=1.0,
-    beta_prior=1.0,
 ):
     """
     x-channel: accept drive
@@ -136,7 +134,6 @@ def compute_accept_reject_drives(
     # density may mildly suppress acceptance
     f_x = (
         b_x
-        + alpha_prior * lp
         + alpha_coherence * C
         + alpha_intensity * I
         + alpha_ci * C * I
@@ -155,7 +152,6 @@ def compute_accept_reject_drives(
         + beta_density * D
         + beta_time_pressure * TP
         + beta_low_coherence * (1.0 - C)
-        - beta_prior * lp
     )
 
     f_y = 0.4 * f_y
@@ -540,7 +536,6 @@ def run_single_trial_demo_2d(row,
 
                              # accept drive params
                              b_x=0.0,
-                             alpha_prior=1.2,
                              alpha_coherence=1.2,
                              alpha_intensity=0.7,
                              alpha_ci=0.4,
@@ -552,7 +547,6 @@ def run_single_trial_demo_2d(row,
                              beta_density=0.8,
                              beta_time_pressure=0.8,
                              beta_low_coherence=1.0,
-                             beta_prior=1.0,
 
                              # dynamics params
                              k_init=1.0,
@@ -590,7 +584,6 @@ def run_single_trial_demo_2d(row,
         time_pressure_gain=time_pressure_gain,
 
         b_x=b_x,
-        alpha_prior=alpha_prior,
         alpha_coherence=alpha_coherence,
         alpha_intensity=alpha_intensity,
         alpha_ci=alpha_ci,
@@ -601,7 +594,6 @@ def run_single_trial_demo_2d(row,
         beta_density=beta_density,
         beta_time_pressure=beta_time_pressure,
         beta_low_coherence=beta_low_coherence,
-        beta_prior=beta_prior,
     )
 
     f_x = drives["f_x"]
@@ -722,7 +714,6 @@ def simulate_dataframe_2d(
 
     # accept drive params
     b_x=0.0,
-    alpha_prior=1.2,
     alpha_coherence=1.2,
     alpha_intensity=0.7,
     alpha_ci=0.4,
@@ -734,7 +725,6 @@ def simulate_dataframe_2d(
     beta_density=0.8,
     beta_time_pressure=0.8,
     beta_low_coherence=1.0,
-    beta_prior=1.0,
 
     # dynamics
     k_init=1.0,
@@ -777,7 +767,6 @@ def simulate_dataframe_2d(
             time_pressure_gain=time_pressure_gain,
 
             b_x=b_x,
-            alpha_prior=alpha_prior,
             alpha_coherence=alpha_coherence,
             alpha_intensity=alpha_intensity,
             alpha_ci=alpha_ci,
@@ -788,7 +777,6 @@ def simulate_dataframe_2d(
             beta_density=beta_density,
             beta_time_pressure=beta_time_pressure,
             beta_low_coherence=beta_low_coherence,
-            beta_prior=beta_prior,
         )
 
         x0, y0 = default_initial_condition(p0, k_init=k_init)
@@ -1050,7 +1038,6 @@ def compute_objective(valid, prob_col="p_accept", pred_col="accept_pred", true_c
     else:
         brier = 0.0
 
-    # score 越大越好
     score = (
         0.55 * bal_acc
         + 0.25 * acc
@@ -1074,7 +1061,6 @@ def sample_params(rng):
         "density_pressure_gain": rng.uniform(0.1, 1.2),
         "time_pressure_gain": rng.uniform(0.2, 2.0),
 
-        "alpha_prior": rng.uniform(0.2, 1.5),
         "alpha_coherence": rng.uniform(1.0, 2.5),
         "alpha_intensity": rng.uniform(0.2, 1.0),
         "alpha_ci": rng.uniform(0.2, 1.5),
@@ -1084,7 +1070,6 @@ def sample_params(rng):
         "beta_density": rng.uniform(0.1, 1.2),
         "beta_time_pressure": rng.uniform(0.2, 2.5),
         "beta_low_coherence": rng.uniform(0.1, 1.5),
-        "beta_prior": rng.uniform(0.1, 1.5),
 
         "lam_x": rng.uniform(0.6, 1.6),
         "lam_y": rng.uniform(0.6, 1.6),

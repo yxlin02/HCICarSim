@@ -19,57 +19,60 @@ def sigmoid(z):
 # =========================
 # 2. Input drive u
 # =========================
-# Example:
-# u = beta_c * coherence + beta_i * intensity + beta_ci * coherence * intensity - gamma * pressure
+# Clean version:
+# u = recommendation evidence - immediate behavioral resistance
+#
+# Here I keep throttle_pressure in u as a direct "local reject pressure".
+# Context variables like car_density / time_pressure / mode are handled
+# separately by lam_eff / sigma_eff / gain_eff.
 
 def compute_drive_u(
     coherence,
     intensity,
-    throttle_pressure,
-    car_density,
-    time_pressure,
-    mode,
-
+    throttle_pressure=0.0,
+    car_density=None,
+    time_pressure=None,
+    mode=None,
     beta_c=1.2,
     beta_i=0.8,
     beta_ci=0.5,
-
-    # NEW
     gamma_throttle=1.0,
-    gamma_density=0.8,
-    gamma_time=0.5,
-    gamma_mode=0.5,
+    gamma_density=0.0,
+    gamma_time=0.0,
+    gamma_mode=0.0,
 ):
     """
-    u = evidence - pressure
-    """
+    Recommendation-side drive:
+        u = evidence - direct local resistance
 
-    # ===== evidence =====
+    By default, density/time/mode are NOT included here to avoid
+    double-counting context, since they are already mapped into
+    lam_eff / sigma_eff / gain_eff.
+    """
     u = (
         beta_c * coherence
         + beta_i * intensity
         + beta_ci * coherence * intensity
     )
 
-    # ===== pressure terms =====
-
-    # throttle -> reject
+    # direct immediate resistance
     u -= gamma_throttle * throttle_pressure
 
-    # car density → reject）
-    u -= gamma_density * car_density
+    # kept for backward compatibility, but default to 0.0
+    if car_density is not None:
+        u -= gamma_density * car_density
 
-    # time pressure → reject
-    if time_pressure:
+    if time_pressure and gamma_time != 0.0:
         u -= gamma_time
 
-    # mode → auto tends to accept, manual tends to reject
-    if mode == "auto":
-        u -= gamma_mode
-    else:
-        u += gamma_mode
+    if mode is not None and gamma_mode != 0.0:
+        if mode == "manual":
+            u -= gamma_mode
+        else:
+            u += gamma_mode
 
     return u
+
 
 # =========================
 # 3. Initial state from prior
@@ -125,7 +128,43 @@ def decision_drift(
 
 
 # =========================
-# 5. Root / nullcline helpers
+# 5. Context mapping
+# =========================
+
+def apply_context_effects(
+    lam=1.0,
+    sigma=0.05,
+    gain=1.5,
+    car_density=0.0,
+    time_pressure=False,
+    mode="manual",
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
+):
+    """
+    Map driving context into effective dynamical parameters.
+
+    Interpretation:
+    - lam_eff: stronger leak / resistance under higher task load
+    - sigma_eff: more stochastic variability under denser traffic
+    - gain_eff: sharper / more urgent dynamics under time pressure
+    """
+    lam_eff = lam * (1.0 + density_lam_gain * car_density)
+    sigma_eff = sigma * (1.0 + density_sigma_gain * car_density)
+    gain_eff = gain * (time_gain_multiplier if time_pressure else 1.0)
+
+    if mode == "auto":
+        lam_eff *= auto_lam_multiplier
+        sigma_eff *= auto_sigma_multiplier
+
+    return lam_eff, sigma_eff, gain_eff
+
+
+# =========================
+# 6. Root / nullcline helpers
 # =========================
 
 def find_nullclines_1d(
@@ -156,12 +195,10 @@ def find_nullclines_1d(
 
     roots = []
 
-    # exact zeros on grid
     exact_idx = np.where(np.isclose(y_grid, 0.0, atol=1e-10))[0]
     for idx in exact_idx:
         roots.append(x_grid[idx])
 
-    # sign changes between neighboring points
     sign_change_idx = np.where(np.diff(np.sign(y_grid)) != 0)[0]
     for i in sign_change_idx:
         x1, x2 = x_grid[i], x_grid[i + 1]
@@ -170,7 +207,6 @@ def find_nullclines_1d(
         if np.isclose(y2 - y1, 0.0):
             continue
 
-        # linear interpolation root
         xr = x1 - y1 * (x2 - x1) / (y2 - y1)
         roots.append(xr)
 
@@ -179,7 +215,6 @@ def find_nullclines_1d(
 
     roots = np.array(sorted(roots))
 
-    # deduplicate near-equal roots
     dedup = [roots[0]]
     for r in roots[1:]:
         if abs(r - dedup[-1]) > 1e-3:
@@ -220,7 +255,7 @@ def classify_fixed_point_stability(
 
 
 # =========================
-# 6. 1D simulation
+# 7. 1D simulation
 # =========================
 
 def simulate_decision_1d(
@@ -230,22 +265,24 @@ def simulate_decision_1d(
     a=1.2,
     gain=1.5,
     theta_dyn=0.0,
-
-    # NEW context
     car_density=0.0,
     time_pressure=False,
     mode="manual",
-
     sigma=0.05,
     dt=0.01,
     T=3.0,
     theta_readout=0.0,
     model="nonlinear_tanh",
     random_state=None,
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
 ):
     """
     Simulate:
-        dx = f(x) dt + sigma * sqrt(dt) * N(0,1)
+        dx = f(x) dt + sigma_eff * sqrt(dt) * N(0,1)
 
     model:
         - 'linear'
@@ -254,37 +291,36 @@ def simulate_decision_1d(
     """
     rng = np.random.default_rng(random_state)
 
+    lam_eff, sigma_eff, gain_eff = apply_context_effects(
+        lam=lam,
+        sigma=sigma,
+        gain=gain,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
+    )
+
     n_steps = int(T / dt) + 1
     t = np.linspace(0, T, n_steps)
 
     x = np.zeros(n_steps, dtype=float)
     x[0] = x0
 
-    # ===== context effects =====
-
-    # 1. car density
-    sigma_eff = sigma * (1 + 1.5 * car_density)
-    lam_eff = lam * (1 + 0.5 * car_density)
-
-    # 2. time pressure
-    gain_eff = gain * (1.5 if time_pressure else 1.0)
-
-    # 3. mode
-    if mode == "auto":
-        lam_eff *= 1.2
-        sigma_eff *= 0.7
-
     for k in range(n_steps - 1):
         drift = decision_drift(
             x[k],
             u=u,
-            lam=lam,
+            lam=lam_eff,
             a=a,
-            gain=gain,
+            gain=gain_eff,
             theta_dyn=theta_dyn,
             model=model,
         )
-
         noise = sigma_eff * np.sqrt(dt) * rng.normal()
         x[k + 1] = x[k] + drift * dt + noise
 
@@ -294,9 +330,9 @@ def simulate_decision_1d(
 
     fixed_points = find_nullclines_1d(
         u=u,
-        lam=lam,
+        lam=lam_eff,
         a=a,
-        gain=gain,
+        gain=gain_eff,
         theta_dyn=theta_dyn,
         model=model,
     )
@@ -306,9 +342,9 @@ def simulate_decision_1d(
         label, deriv = classify_fixed_point_stability(
             fp,
             u=u,
-            lam=lam,
+            lam=lam_eff,
             a=a,
-            gain=gain,
+            gain=gain_eff,
             theta_dyn=theta_dyn,
             model=model,
         )
@@ -328,11 +364,14 @@ def simulate_decision_1d(
         "accept": accept,
         "fixed_points": fixed_points,
         "fixed_point_info": stability,
+        "lam_eff": lam_eff,
+        "sigma_eff": sigma_eff,
+        "gain_eff": gain_eff,
     }
 
 
 # =========================
-# 7. Plot phase line / nullcline
+# 8. Plot phase line / nullcline
 # =========================
 
 def plot_phase_line_and_nullcline(
@@ -342,36 +381,57 @@ def plot_phase_line_and_nullcline(
     gain=1.5,
     theta_dyn=0.0,
     model="nonlinear_tanh",
+    car_density=0.0,
+    time_pressure=False,
+    mode="manual",
+    sigma=0.05,
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
     x_min=-5.0,
     x_max=5.0,
     n=600,
     ax=None,
 ):
     """
-    Plot dx/dt vs x.
-    Nullcline/fixed points are where dx/dt = 0.
+    Plot dx/dt vs x using context-adjusted parameters.
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 4))
+
+    lam_eff, _, gain_eff = apply_context_effects(
+        lam=lam,
+        sigma=sigma,
+        gain=gain,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
+    )
 
     x_grid = np.linspace(x_min, x_max, n)
     dxdt = decision_drift(
         x_grid,
         u=u,
-        lam=lam,
+        lam=lam_eff,
         a=a,
-        gain=gain,
+        gain=gain_eff,
         theta_dyn=theta_dyn,
         model=model,
     )
 
     if model == "linear":
-        eq = -lam * x_grid + u
-        label = r'$\dot{x}=-\lambda x + u$'
+        label = r'$\dot{x}=-\lambda_{eff} x + u$'
     elif model == "nonlinear_tanh":
-        label = r'$\dot{x}=-\lambda x + a\tanh(g(x-\theta_{dyn})) + u$'
+        label = r'$\dot{x}=-\lambda_{eff} x + a\tanh(g_{eff}(x-\theta_{dyn})) + u$'
     else:
-        label = r'$\dot{x}=-\lambda x + a(2\sigma(g(x-\theta_{dyn}))-1) + u$'
+        label = r'$\dot{x}=-\lambda_{eff} x + a(2\sigma(g_{eff}(x-\theta_{dyn}))-1) + u$'
 
     ax.plot(x_grid, dxdt, color="blue", label=label)
     ax.axhline(0.0, linestyle="--", color="black", linewidth=1)
@@ -382,14 +442,14 @@ def plot_phase_line_and_nullcline(
             linestyle="-",
             color="green",
             linewidth=1.5,
-            label=f"decision_threshold={theta_dyn:.2f}",
+            label=f"theta_dyn={theta_dyn:.2f}",
         )
 
     fixed_points = find_nullclines_1d(
         u=u,
-        lam=lam,
+        lam=lam_eff,
         a=a,
-        gain=gain,
+        gain=gain_eff,
         theta_dyn=theta_dyn,
         model=model,
         x_min=x_min,
@@ -397,31 +457,50 @@ def plot_phase_line_and_nullcline(
         n=3000,
     )
 
+    seen_stable = False
+    seen_unstable = False
+
     for fp in fixed_points:
         stab, _ = classify_fixed_point_stability(
             fp,
             u=u,
-            lam=lam,
+            lam=lam_eff,
             a=a,
-            gain=gain,
+            gain=gain_eff,
             theta_dyn=theta_dyn,
             model=model,
         )
         ls = "-" if stab == "stable" else "--"
-        ax.axvline(fp, linestyle=ls, alpha=0.8, linewidth=1.2, color="red", label=stab)
-        ax.text(fp, 0.02 * (np.max(dxdt) - np.min(dxdt) + 1e-8), f"{fp:.2f}",
-                rotation=0, va="bottom", ha="center", fontsize=8)
+
+        label_fp = None
+        if stab == "stable" and not seen_stable:
+            label_fp = "stable fp"
+            seen_stable = True
+        elif stab == "unstable" and not seen_unstable:
+            label_fp = "unstable fp"
+            seen_unstable = True
+
+        ax.axvline(fp, linestyle=ls, alpha=0.8, linewidth=1.2, color="red", label=label_fp)
+        ax.text(
+            fp,
+            0.02 * (np.max(dxdt) - np.min(dxdt) + 1e-8),
+            f"{fp:.2f}",
+            rotation=0,
+            va="bottom",
+            ha="center",
+            fontsize=8,
+        )
 
     ax.set_xlabel("x")
     ax.set_ylabel("dx/dt")
     ax.set_title(f"1D Phase Line / Nullcline ({model})")
-    ax.legend(bbox_to_anchor=(1.05, 0), loc='lower left', fontsize=8)
+    ax.legend(bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
 
     return ax, fixed_points
 
 
 # =========================
-# 8. Plot trajectories from different initial states
+# 9. Plot trajectories from different initial states
 # =========================
 
 def plot_trajectories_different_x0(
@@ -431,15 +510,22 @@ def plot_trajectories_different_x0(
     a=1.2,
     gain=1.5,
     theta_dyn=0.0,
+    car_density=0.0,
+    time_pressure=False,
+    mode="manual",
     sigma=0.0,
     dt=0.01,
     T=3.0,
     theta_readout=0.0,
     model="nonlinear_tanh",
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
 ):
     fig, axes = plt.subplots(1, 2, figsize=(15, 4))
 
-    # Left: phase line
     plot_phase_line_and_nullcline(
         u=u,
         lam=lam,
@@ -447,23 +533,44 @@ def plot_trajectories_different_x0(
         gain=gain,
         theta_dyn=theta_dyn,
         model=model,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
+        sigma=sigma,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
         ax=axes[0],
     )
 
-    # Mark initial points on the actual phase line
+    lam_eff, _, gain_eff = apply_context_effects(
+        lam=lam,
+        sigma=sigma,
+        gain=gain,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
+    )
+
     for x0 in x0_list:
         dx0 = decision_drift(
             x0,
             u=u,
-            lam=lam,
+            lam=lam_eff,
             a=a,
-            gain=gain,
+            gain=gain_eff,
             theta_dyn=theta_dyn,
             model=model,
         )
         axes[0].scatter([x0], [dx0], s=30)
 
-    # Right: trajectories
     all_fixed_points = None
 
     for i, x0 in enumerate(x0_list):
@@ -474,12 +581,20 @@ def plot_trajectories_different_x0(
             a=a,
             gain=gain,
             theta_dyn=theta_dyn,
+            car_density=car_density,
+            time_pressure=time_pressure,
+            mode=mode,
             sigma=sigma,
             dt=dt,
             T=T,
             theta_readout=theta_readout,
             model=model,
             random_state=100 + i,
+            density_lam_gain=density_lam_gain,
+            density_sigma_gain=density_sigma_gain,
+            time_gain_multiplier=time_gain_multiplier,
+            auto_lam_multiplier=auto_lam_multiplier,
+            auto_sigma_multiplier=auto_sigma_multiplier,
         )
         all_fixed_points = result["fixed_points"]
         label = f"x0={x0:.2f}, final={result['x_final']:.2f}, accept={result['accept']}"
@@ -497,9 +612,9 @@ def plot_trajectories_different_x0(
             stab, _ = classify_fixed_point_stability(
                 fp,
                 u=u,
-                lam=lam,
+                lam=lam_eff,
                 a=a,
-                gain=gain,
+                gain=gain_eff,
                 theta_dyn=theta_dyn,
                 model=model,
             )
@@ -509,14 +624,14 @@ def plot_trajectories_different_x0(
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t)")
     axes[1].set_title(f"Trajectories from Different Initial States ({model})")
-    axes[1].legend(bbox_to_anchor=(1.05, 0), loc='lower left', fontsize=8)
+    axes[1].legend(bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
 
     plt.tight_layout()
     plt.show()
 
 
 # =========================
-# 9. Single-trial demo
+# 10. Single-trial demo
 # =========================
 
 def run_single_trial_demo(
@@ -525,9 +640,9 @@ def run_single_trial_demo(
     beta_i=0.8,
     beta_ci=0.5,
     gamma_throttle=1.0,
-    gamma_density=0.8,
-    gamma_time=0.5,
-    gamma_mode=0.5,
+    gamma_density=0.0,
+    gamma_time=0.0,
+    gamma_mode=0.0,
     kappa=1.0,
     lam=1.0,
     a=1.2,
@@ -538,6 +653,11 @@ def run_single_trial_demo(
     T=5.0,
     theta_readout=0.0,
     model="nonlinear_tanh",
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
 ):
     p0 = float(row["subject_prior_accept_prob_subcategory"])
     coherence = float(row["coherence"])
@@ -548,6 +668,7 @@ def run_single_trial_demo(
     mode = row["mode"]
 
     x0 = compute_x0_from_prior(p0, kappa=kappa)
+
     u = compute_drive_u(
         coherence=coherence,
         intensity=intensity,
@@ -555,7 +676,6 @@ def run_single_trial_demo(
         car_density=car_density,
         time_pressure=time_pressure,
         mode=mode,
-        
         beta_c=beta_c,
         beta_i=beta_i,
         beta_ci=beta_ci,
@@ -568,21 +688,23 @@ def run_single_trial_demo(
     result = simulate_decision_1d(
         x0=x0,
         u=u,
-
         lam=lam,
         a=a,
         gain=gain,
         theta_dyn=theta_dyn,
-
         car_density=car_density,
         time_pressure=time_pressure,
         mode=mode,
-
         sigma=sigma,
         dt=dt,
         T=T,
         theta_readout=theta_readout,
         model=model,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
     )
 
     print("===== Single Trial Demo (1D) =====")
@@ -590,6 +712,9 @@ def run_single_trial_demo(
     print(f"prior p0 = {p0:.3f}")
     print(f"x0 = {x0:.3f}")
     print(f"u = {u:.3f}")
+    print(f"lam_eff = {result['lam_eff']:.3f}")
+    print(f"sigma_eff = {result['sigma_eff']:.3f}")
+    print(f"gain_eff = {result['gain_eff']:.3f}")
     print(f"theta_dyn = {theta_dyn:.3f}")
     print(f"theta_readout = {theta_readout:.3f}")
     print(f"x_final = {result['x_final']:.3f}")
@@ -614,18 +739,26 @@ def run_single_trial_demo(
         a=a,
         gain=gain,
         theta_dyn=theta_dyn,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
         sigma=sigma,
         dt=dt,
         T=T,
         theta_readout=theta_readout,
         model=model,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
     )
 
     return result
 
 
 # =========================
-# 10. Batch simulation on dataframe
+# 11. Batch simulation on dataframe
 # =========================
 
 def simulate_dataframe_decisions(
@@ -634,9 +767,9 @@ def simulate_dataframe_decisions(
     beta_i=0.8,
     beta_ci=0.5,
     gamma_throttle=1.0,
-    gamma_density=0.8,
-    gamma_time=0.5,
-    gamma_mode=0.5,
+    gamma_density=0.0,
+    gamma_time=0.0,
+    gamma_mode=0.0,
     kappa=1.0,
     lam=1.0,
     a=1.2,
@@ -647,6 +780,11 @@ def simulate_dataframe_decisions(
     T=5.0,
     theta_readout=0.0,
     model="nonlinear_tanh",
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
 ):
     records = []
 
@@ -654,48 +792,49 @@ def simulate_dataframe_decisions(
         p0 = float(row["subject_prior_accept_prob_subcategory"])
         coherence = float(row["coherence"])
         intensity = float(row["intensity"])
-        # pressure = float(row["mean_throttle_pre2s"])
         throttle_pressure = float(row["var_throttle_pre2s"])
         car_density = float(row["car_density"])
         time_pressure = row["time_pressure"]
         mode = row["mode"]
 
         x0 = compute_x0_from_prior(p0, kappa=kappa)
+
         u = compute_drive_u(
-                coherence=coherence,
-                intensity=intensity,
-                throttle_pressure=throttle_pressure,
-                car_density=car_density,
-                time_pressure=time_pressure,
-                mode=mode,
-                
-                beta_c=beta_c,
-                beta_i=beta_i,
-                beta_ci=beta_ci,
-                gamma_throttle=gamma_throttle,
-                gamma_density=gamma_density,
-                gamma_time=gamma_time,
-                gamma_mode=gamma_mode,
-            )
+            coherence=coherence,
+            intensity=intensity,
+            throttle_pressure=throttle_pressure,
+            car_density=car_density,
+            time_pressure=time_pressure,
+            mode=mode,
+            beta_c=beta_c,
+            beta_i=beta_i,
+            beta_ci=beta_ci,
+            gamma_throttle=gamma_throttle,
+            gamma_density=gamma_density,
+            gamma_time=gamma_time,
+            gamma_mode=gamma_mode,
+        )
 
         result = simulate_decision_1d(
             x0=x0,
             u=u,
-
             lam=lam,
             a=a,
             gain=gain,
             theta_dyn=theta_dyn,
-
             car_density=car_density,
             time_pressure=time_pressure,
             mode=mode,
-
             sigma=sigma,
             dt=dt,
             T=T,
             theta_readout=theta_readout,
             model=model,
+            density_lam_gain=density_lam_gain,
+            density_sigma_gain=density_sigma_gain,
+            time_gain_multiplier=time_gain_multiplier,
+            auto_lam_multiplier=auto_lam_multiplier,
+            auto_sigma_multiplier=auto_sigma_multiplier,
         )
 
         fps = result["fixed_points"]
@@ -711,6 +850,9 @@ def simulate_dataframe_decisions(
                 "idx": idx,
                 "x0": x0,
                 "u": u,
+                "lam_eff": result["lam_eff"],
+                "sigma_eff": result["sigma_eff"],
+                "gain_eff": result["gain_eff"],
                 "x_final": result["x_final"],
                 "p_accept_pred": result["p_accept"],
                 "accept_pred": result["accept"],
@@ -724,7 +866,7 @@ def simulate_dataframe_decisions(
 
 
 # =========================
-# 11. Convenience plotting for a row
+# 12. Convenience plotting for a row
 # =========================
 
 def inspect_single_trial_phase_portrait(
@@ -732,26 +874,35 @@ def inspect_single_trial_phase_portrait(
     beta_c=1.2,
     beta_i=0.8,
     beta_ci=0.5,
-    gamma=1.0,
+    gamma_throttle=1.0,
+    gamma_density=0.0,
+    gamma_time=0.0,
+    gamma_mode=0.0,
     kappa=1.0,
     lam=1.0,
     a=1.2,
     gain=1.5,
     theta_dyn=0.0,
+    sigma=0.05,
     model="nonlinear_tanh",
+    density_lam_gain=0.5,
+    density_sigma_gain=1.5,
+    time_gain_multiplier=1.5,
+    auto_lam_multiplier=1.2,
+    auto_sigma_multiplier=0.7,
     x_min=-5.0,
     x_max=5.0,
 ):
     p0 = float(row["subject_prior_accept_prob_subcategory"])
     coherence = float(row["coherence"])
     intensity = float(row["intensity"])
-    # pressure = float(row["mean_throttle_pre2s"])
-    throttle_pressure = float(row["mean_throttle_pre2s"])
+    throttle_pressure = float(row["var_throttle_pre2s"])
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
     mode = row["mode"]
 
     x0 = compute_x0_from_prior(p0, kappa=kappa)
+
     u = compute_drive_u(
         coherence=coherence,
         intensity=intensity,
@@ -759,11 +910,27 @@ def inspect_single_trial_phase_portrait(
         car_density=car_density,
         time_pressure=time_pressure,
         mode=mode,
-        
         beta_c=beta_c,
         beta_i=beta_i,
         beta_ci=beta_ci,
-        gamma=gamma,
+        gamma_throttle=gamma_throttle,
+        gamma_density=gamma_density,
+        gamma_time=gamma_time,
+        gamma_mode=gamma_mode,
+    )
+
+    lam_eff, _, gain_eff = apply_context_effects(
+        lam=lam,
+        sigma=sigma,
+        gain=gain,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
     )
 
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -774,6 +941,15 @@ def inspect_single_trial_phase_portrait(
         gain=gain,
         theta_dyn=theta_dyn,
         model=model,
+        car_density=car_density,
+        time_pressure=time_pressure,
+        mode=mode,
+        sigma=sigma,
+        density_lam_gain=density_lam_gain,
+        density_sigma_gain=density_sigma_gain,
+        time_gain_multiplier=time_gain_multiplier,
+        auto_lam_multiplier=auto_lam_multiplier,
+        auto_sigma_multiplier=auto_sigma_multiplier,
         x_min=x_min,
         x_max=x_max,
         ax=ax,
@@ -782,9 +958,9 @@ def inspect_single_trial_phase_portrait(
     dx0 = decision_drift(
         x0,
         u=u,
-        lam=lam,
+        lam=lam_eff,
         a=a,
-        gain=gain,
+        gain=gain_eff,
         theta_dyn=theta_dyn,
         model=model,
     )
@@ -795,7 +971,7 @@ def inspect_single_trial_phase_portrait(
 
 
 # =========================
-# 12. Suggested default parameter regimes
+# 13. Suggested default parameter regimes
 # =========================
 
 DEFAULT_LINEAR_PARAMS = dict(
