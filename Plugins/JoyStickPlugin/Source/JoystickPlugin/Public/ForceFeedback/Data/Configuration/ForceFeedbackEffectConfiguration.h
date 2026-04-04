@@ -1,0 +1,52 @@
+// JoystickPlugin is licensed under the MIT License.
+// Copyright Jayden Maalouf 2026. All Rights Reserved.
+
+#pragma once
+
+#include "ForceFeedbackConfigurationBase.h"
+
+#include "ForceFeedbackEffectConfiguration.generated.h"
+
+USTRUCT(BlueprintType)
+struct JOYSTICKPLUGIN_API FForceFeedbackEffectConfiguration : public FForceFeedbackConfigurationBase
+{
+	GENERATED_BODY()
+
+	FForceFeedbackEffectConfiguration()
+		: AutoUpdatePostTick(true)
+		  , SubstepTicks(false)
+		  , EffectHz(60)
+		  , MaxSubticks(12)
+	{
+	}
+
+	FForceFeedbackEffectConfiguration(const FForceFeedbackConfigurationBase& BaseConfiguration, const bool bAutoUpdatePostTick)
+		: Super(BaseConfiguration)
+		  , AutoUpdatePostTick(bAutoUpdatePostTick)
+		  , SubstepTicks(false)
+		  , EffectHz(60)
+		  , MaxSubticks(12)
+	{
+	}
+
+	FForceFeedbackEffectConfiguration(const bool bAutoInit, const bool bAutoStartOnInit, const bool bAutoUpdatePostTick)
+		: Super(bAutoInit, bAutoStartOnInit)
+		  , AutoUpdatePostTick(bAutoUpdatePostTick)
+		  , SubstepTicks(false)
+		  , EffectHz(60)
+		  , MaxSubticks(12)
+	{
+	}
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Joystick|Force Feedback", meta=(ExposeOnSpawn=true))
+	bool AutoUpdatePostTick;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Joystick|Force Feedback", meta=(ExposeOnSpawn=true))
+	bool SubstepTicks;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Joystick|Force Feedback", meta=(ExposeOnSpawn=true, EditCondition="SubstepTicks", EditConditionHides, ClampMin="1", ClampMax="1000", UIMin="1", UIMax="1000"))
+	int EffectHz;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Joystick|Force Feedback", meta=(ExposeOnSpawn=true, EditCondition="SubstepTicks", EditConditionHides, ClampMin="1", ClampMax="16", UIMin="1", UIMax="16"))
+	int MaxSubticks;
+};
