@@ -117,6 +117,7 @@ def build_per_reaction_df(
         for scene_key, trial in scenes.items():
             df_marker = trial["marker"].copy()
             df_car = trial["car"].copy()
+            df_subcategory_rating = trial["subcategory_rating"].copy()
 
             if len(df_marker) == 0 or len(df_car) == 0:
                 continue
@@ -172,6 +173,18 @@ def build_per_reaction_df(
                 pattern_id = react_row["current_encode_id"]
 
                 recommendation, rec_category, rec_subcategory = _extract_pattern_info(pattern_id)
+
+                # ---------- find matched evaluation ----------
+                subset = df_subcategory_rating[
+                    df_subcategory_rating["trial_id"] == trial_id
+                ]
+
+                assert len(subset) == 1, f"Expected 1 row, got {len(subset)}"
+
+                appropriateness = subset["appropriateness"].iloc[0] if "appropriateness" in subset.columns else default_eval_value
+                disturbance = subset["disturbance"].iloc[0] if "disturbance" in subset.columns else default_eval_value
+                satisfaction = subset["satisfaction"].iloc[0] if "satisfaction" in subset.columns else default_eval_value
+
 
                 # ---------- find matched trigger ----------
                 # same trial + same encode + before this reaction
@@ -336,9 +349,9 @@ def build_per_reaction_df(
                     "var_throttle_post5s": var_throttle_post5s,
 
                     # ---------------- evaluation ----------------
-                    "disturbance": default_eval_value,
-                    "satisfaction": default_eval_value,
-                    "appropriateness": default_eval_value,
+                    "appropriateness": appropriateness,
+                    "disturbance": disturbance,
+                    "satisfaction": satisfaction,
 
                     # ---------------- bookkeeping ----------------
                     "reaction__time_ms": reaction_time_unix,
