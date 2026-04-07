@@ -98,14 +98,12 @@ def compute_accept_reject_drives(
     alpha_coherence=1.2,
     alpha_intensity=0.7,
     alpha_ci=0.4,
-    alpha_density=0.3,
 
     # reject drive parameters
     b_y=0.0,
     beta_pressure=1.0,
     beta_density=0.8,
     beta_time_pressure=0.8,
-    beta_low_coherence=1.0,
 ):
     """
     x-channel: accept drive
@@ -137,7 +135,6 @@ def compute_accept_reject_drives(
         + alpha_coherence * C
         + alpha_intensity * I
         + alpha_ci * C * I
-        - alpha_density * D
     )
 
     # Reject drive:
@@ -151,10 +148,9 @@ def compute_accept_reject_drives(
         + beta_pressure * p_eff
         + beta_density * D
         + beta_time_pressure * TP
-        + beta_low_coherence * (1.0 - C)
     )
 
-    f_y = 0.4 * f_y
+    # f_y = 0.4 * f_y
 
     return {
         "f_x": f_x,
@@ -250,58 +246,36 @@ def fixed_point_2d(f_x, f_y, lam_x=1.0, lam_y=1.0, w_xy=1.3, w_yx=1.3):
 # 6. Plot phase plane
 # =========================================================
 def compute_vector_field(
-    X,
-    Y,
-    f_x,
-    f_y,
-    lam_x=1.0,
-    lam_y=1.0,
-    w_xy=1.3,
-    w_yx=1.3,
+    X, Y,
+    f_x, f_y,
+    lam_x=1.0, lam_y=1.0,
+    w_xy=1.3, w_yx=1.3,
     model="linear",
-
-    # nonlinear_sigmoid params
-    a_x=1.2,
-    a_y=1.2,
-    gain_x=1.0,
-    gain_y=1.0,
-
-    # nonlinear_cubic params
-    alpha_x=1.0,
-    alpha_y=1.0,
-    beta_x=1.0,
-    beta_y=1.0,
+    a_x=1.2, a_y=1.2,
+    gain_x=1.0, gain_y=1.0,
+    stim_scale_x=1.0,
+    stim_self_x=1.0,
+    alpha_x=1.0, alpha_y=1.0,
+    beta_x=1.0, beta_y=1.0,
 ):
     if model == "linear":
         U = -lam_x * X + f_x - w_xy * Y
         V = -lam_y * Y + f_y - w_yx * X
 
     elif model == "nonlinear_sigmoid":
-        input_x = f_x + a_x * X - w_xy * Y
+        input_x = f_x + (a_x * stim_self_x) * X - w_xy * Y
         input_y = f_y + a_y * Y - w_yx * X
 
         U = -lam_x * X + np.tanh(gain_x * input_x)
+        # U = -lam_x * X + stim_scale_x * np.tanh(gain_x * input_x)
         V = -lam_y * Y + np.tanh(gain_y * input_y)
 
     elif model == "nonlinear_cubic":
-        U = (
-            -lam_x * X
-            + alpha_x * X
-            - beta_x * X**3
-            + f_x
-            - w_xy * Y
-        )
-
-        V = (
-            -lam_y * Y
-            + alpha_y * Y
-            - beta_y * Y**3
-            + f_y
-            - w_yx * X
-        )
+        U = -lam_x * X + alpha_x * X - beta_x * X**3 + f_x - w_xy * Y
+        V = -lam_y * Y + alpha_y * Y - beta_y * Y**3 + f_y - w_yx * X
 
     else:
-        raise ValueError(f"Unknown model type: {model}")
+        raise ValueError(f"Unknown model: {model}")
 
     return U, V
 
@@ -323,6 +297,8 @@ def plot_phase_plane(
     a_y=1.2,
     gain_x=1.0,
     gain_y=1.0,
+    stim_scale_x=1.0,
+    stim_self_x=1.0,
 
     # nonlinear_cubic params
     alpha_x=1.0,
@@ -347,6 +323,8 @@ def plot_phase_plane(
         model=model,
         a_x=a_x, a_y=a_y,
         gain_x=gain_x, gain_y=gain_y,
+        stim_scale_x=stim_scale_x,
+        stim_self_x=stim_self_x,
         alpha_x=alpha_x, alpha_y=alpha_y,
         beta_x=beta_x, beta_y=beta_y,
     )
@@ -365,6 +343,8 @@ def plot_phase_plane(
         model=model,
         a_x=a_x, a_y=a_y,
         gain_x=gain_x, gain_y=gain_y,
+        stim_scale_x=stim_scale_x,
+        stim_self_x=stim_self_x,
         alpha_x=alpha_x, alpha_y=alpha_y,
         beta_x=beta_x, beta_y=beta_y,
     )
@@ -386,7 +366,7 @@ def plot_phase_plane(
     ax.set_xlabel("accept state x")
     ax.set_ylabel("reject state y")
     ax.set_title(f"2D Decision Dynamics Phase Plane ({model})")
-    ax.legend(handles=legend_handles, bbox_to_anchor=(1.05, 0), loc='lower left', fontsize=8)
+    ax.legend(handles=legend_handles, bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
 
     return ax
 
@@ -420,6 +400,8 @@ def plot_trajectories_from_inits(
     alpha_y=1.0,
     beta_x=1.0,
     beta_y=1.0,
+    stim_scale_x = 1.0,
+    stim_self_x = 1.0,
 ):
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -441,6 +423,8 @@ def plot_trajectories_from_inits(
         alpha_y=alpha_y,
         beta_x=beta_x,
         beta_y=beta_y,
+        stim_scale_x=stim_scale_x,
+        stim_self_x=stim_self_x,
         ax=axes[0],
     )
 
@@ -454,6 +438,8 @@ def plot_trajectories_from_inits(
         alpha_y=alpha_y,
         beta_x=beta_x,
         beta_y=beta_y,
+        stim_scale_x = stim_scale_x,
+        stim_self_x = stim_self_x,
     )
 
     for i, (x0, y0) in enumerate(init_points):
@@ -519,14 +505,57 @@ def plot_trajectories_from_inits(
 #   x0 = +k_init * logit(prior)
 #   y0 = -k_init * logit(prior)
 
-def default_initial_condition(p0, k_init=1.0):
-    bias = p0 - 0.5
-    return k_init * bias, -k_init * bias
+def default_initial_condition(
+    p0,
+    k_init=1.0,
+    noise_std=0.02,
+    rng=None,
+    eps=1e-6,
+):
+    """
+    p0: prior accept probability
+    k_init: scaling factor
+    noise_std: noise in probability space
+    """
+
+    if rng is None:
+        rng = np.random.default_rng()
+
+    p = p0 + rng.normal(0, noise_std)
+
+    p = np.clip(p, eps, 1 - eps)
+
+    bias = p - 0.5
+    x0 = k_init * bias
+    y0 = -k_init * bias
+
+    return x0, y0
 
 
 # =========================================================
 # 9. Single-trial demo
 # =========================================================
+def perturb_p0(p0, noise_std=0.1, rng=None):
+    if rng is None:
+        rng = np.random.default_rng()
+    
+    p0_new = p0 + rng.normal(0, noise_std)
+    p0_new = np.clip(p0_new, 1e-4, 1 - 1e-4)
+    
+    return p0_new
+
+def generate_init_points_from_p0(p0, k_init=1.0, noise_std=0.05, n_points=7, rng=None):
+    if rng is None:
+        rng = np.random.default_rng()
+
+    init_points = []
+
+    for _ in range(n_points):
+        p0_i = perturb_p0(p0, noise_std=noise_std, rng=rng)
+        x0_i, y0_i = default_initial_condition(p0_i, k_init=k_init)
+        init_points.append((x0_i, y0_i))
+
+    return init_points
 
 def run_single_trial_demo_2d(row,
                              # effective pressure params
@@ -539,14 +568,12 @@ def run_single_trial_demo_2d(row,
                              alpha_coherence=1.2,
                              alpha_intensity=0.7,
                              alpha_ci=0.4,
-                             alpha_density=0.3,
 
                              # reject drive params
                              b_y=0.0,
                              beta_pressure=1.0,
                              beta_density=0.8,
                              beta_time_pressure=0.8,
-                             beta_low_coherence=1.0,
 
                              # dynamics params
                              k_init=1.0,
@@ -567,6 +594,11 @@ def run_single_trial_demo_2d(row,
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
     mode = row["mode"]
+    stim_strength = (
+        alpha_coherence * coherence
+        + alpha_intensity * intensity
+        + alpha_ci * coherence * intensity
+    )
 
     model = kwargs.get("model", "linear")
 
@@ -587,13 +619,11 @@ def run_single_trial_demo_2d(row,
         alpha_coherence=alpha_coherence,
         alpha_intensity=alpha_intensity,
         alpha_ci=alpha_ci,
-        alpha_density=alpha_density,
 
         b_y=b_y,
         beta_pressure=beta_pressure,
         beta_density=beta_density,
         beta_time_pressure=beta_time_pressure,
-        beta_low_coherence=beta_low_coherence,
     )
 
     f_x = drives["f_x"]
@@ -621,6 +651,8 @@ def run_single_trial_demo_2d(row,
         alpha_y=kwargs.get("alpha_y", 1.0),
         beta_x=kwargs.get("beta_x", 1.0),
         beta_y=kwargs.get("beta_y", 1.0),
+        stim_scale_x = kwargs.get("stim_scale_x", stim_strength),
+        stim_self_x = kwargs.get("stim_self_x", stim_strength),
     )
 
     res = simulate_func(
@@ -667,15 +699,12 @@ def run_single_trial_demo_2d(row,
     print(f"p_accept = {res['p_accept']:.3f}")
     print(f"accept_pred = {res['accept_pred']}")
 
-    init_points = [
-        (x0, y0),
-        (x0 - 1.0, y0),
-        (x0 + 1.0, y0),
-        (x0, y0 - 1.0),
-        (x0, y0 + 1.0),
-        (x0 - 1.0, y0 - 1.0),
-        (x0 + 1.0, y0 + 1.0),
-    ]
+    init_points = generate_init_points_from_p0(
+        p0,
+        k_init=k_init,
+        noise_std=0.5,
+        n_points=5
+    )
 
     plot_trajectories_from_inits(
         init_points=init_points,
@@ -692,6 +721,8 @@ def run_single_trial_demo_2d(row,
         decision_threshold=decision_threshold,
         simulate_func=simulate_func,
         model=model,
+        stim_scale_x=stim_strength,
+        stim_self_x=stim_strength,
     )
 
     return {
@@ -717,14 +748,12 @@ def simulate_dataframe_2d(
     alpha_coherence=1.2,
     alpha_intensity=0.7,
     alpha_ci=0.4,
-    alpha_density=0.3,
 
     # reject drive params
     b_y=0.0,
     beta_pressure=1.0,
     beta_density=0.8,
     beta_time_pressure=0.8,
-    beta_low_coherence=1.0,
 
     # dynamics
     k_init=1.0,
@@ -751,6 +780,12 @@ def simulate_dataframe_2d(
         time_pressure = row["time_pressure"]
         mode = row["mode"]
 
+        stim_strength = (
+            alpha_coherence * coherence
+            + alpha_intensity * intensity
+            + alpha_ci * coherence * intensity
+        )
+
         model = kwargs.get("model", "linear")
 
         drives = compute_accept_reject_drives(
@@ -770,14 +805,16 @@ def simulate_dataframe_2d(
             alpha_coherence=alpha_coherence,
             alpha_intensity=alpha_intensity,
             alpha_ci=alpha_ci,
-            alpha_density=alpha_density,
 
             b_y=b_y,
             beta_pressure=beta_pressure,
             beta_density=beta_density,
             beta_time_pressure=beta_time_pressure,
-            beta_low_coherence=beta_low_coherence,
         )
+
+        f_x = drives["f_x"]
+        f_y = drives["f_y"]
+        p_eff = drives["p_eff"]
 
         x0, y0 = default_initial_condition(p0, k_init=k_init)
 
@@ -789,18 +826,20 @@ def simulate_dataframe_2d(
             simulate_func = simulate_2d_decision_system
         else:
             raise ValueError(f"Unknown model type: {model}")
-        
+
         model_kwargs = get_model_kwargs(
-                model=model,
-                a_x=kwargs.get("a_x", 1.2),
-                a_y=kwargs.get("a_y", 1.2),
-                gain_x=kwargs.get("gain_x", 1.0),
-                gain_y=kwargs.get("gain_y", 1.0),
-                alpha_x=kwargs.get("alpha_x", 1.0),
-                alpha_y=kwargs.get("alpha_y", 1.0),
-                beta_x=kwargs.get("beta_x", 1.0),
-                beta_y=kwargs.get("beta_y", 1.0),
-            )
+            model=model,
+            a_x=kwargs.get("a_x", 1.2),
+            a_y=kwargs.get("a_y", 1.2),
+            gain_x=kwargs.get("gain_x", 1.0),
+            gain_y=kwargs.get("gain_y", 1.0),
+            alpha_x=kwargs.get("alpha_x", 1.0),
+            alpha_y=kwargs.get("alpha_y", 1.0),
+            beta_x=kwargs.get("beta_x", 1.0),
+            beta_y=kwargs.get("beta_y", 1.0),
+            stim_scale_x = kwargs.get("stim_scale_x", stim_strength),
+            stim_self_x = kwargs.get("stim_self_x", stim_strength),
+        )
         
         res = simulate_func(
             x0=x0,
@@ -870,8 +909,12 @@ def simulate_2d_decision_system_nonlinear(
     x0, y0, f_x, f_y,
     lam_x=1.0, lam_y=1.0,
     w_xy=1.3, w_yx=1.3,
-    a_x=1.2, a_y=1.2,       # self-excitation
-    gain_x=1.0, gain_y=1.0, # nonlinearity steepness
+    a_x=1.0, a_y=1.0,
+    gain_x=1.0, gain_y=1.0,
+
+    stim_scale_x=1.0,
+    stim_self_x=1.0,
+
     sigma_x=0.02, sigma_y=0.02,
     dt=0.01, T=3.0,
     decision_threshold=0.0,
@@ -896,7 +939,13 @@ def simulate_2d_decision_system_nonlinear(
         noise_x = sigma_x * np.sqrt(dt) * rng.normal()
         noise_y = sigma_y * np.sqrt(dt) * rng.normal()
 
-        input_x = f_x + a_x * x[k] - w_xy * y[k]
+        input_x = f_x + (a_x * stim_self_x) * x[k] - w_xy * y[k]
+        # input_y = f_y + a_y * y[k] - w_yx * x[k]
+
+        # dx = (-lam_x * x[k] + stim_scale_x * phi_x(input_x)) * dt + noise_x
+        # dy = (-lam_y * y[k] + phi_y(input_y)) * dt + noise_y
+
+        # input_x = f_x + (a_x) * x[k] - w_xy * y[k]
         input_y = f_y + a_y * y[k] - w_yx * x[k]
 
         dx = (-lam_x * x[k] + phi_x(input_x)) * dt + noise_x
@@ -987,6 +1036,8 @@ def get_model_kwargs(
     alpha_y=1.0,
     beta_x=1.0,
     beta_y=1.0,
+    stim_scale_x=0.0,
+    stim_self_x=0.0,
 ):
     if model == "nonlinear_sigmoid":
         return {
@@ -994,6 +1045,8 @@ def get_model_kwargs(
             "a_y": a_y,
             "gain_x": gain_x,
             "gain_y": gain_y,
+            "stim_scale_x": stim_scale_x,
+            "stim_self_x": stim_self_x,
         }
     elif model == "nonlinear_cubic":
         return {
@@ -1064,12 +1117,10 @@ def sample_params(rng):
         "alpha_coherence": rng.uniform(1.0, 2.5),
         "alpha_intensity": rng.uniform(0.2, 1.0),
         "alpha_ci": rng.uniform(0.2, 1.5),
-        "alpha_density": rng.uniform(0.0, 1.0),
 
         "beta_pressure": rng.uniform(0.1, 1.5),
         "beta_density": rng.uniform(0.1, 1.2),
         "beta_time_pressure": rng.uniform(0.2, 2.5),
-        "beta_low_coherence": rng.uniform(0.1, 1.5),
 
         "lam_x": rng.uniform(0.6, 1.6),
         "lam_y": rng.uniform(0.6, 1.6),

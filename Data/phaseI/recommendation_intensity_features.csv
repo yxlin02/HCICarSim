@@ -1,0 +1,15 @@
+id,category,subcategory,item,recommendation_text,word_count,content_urgency,content_info_load,sound_duration,sound_volume,sound_pitch,visual_complexity,visual_size,haptic_intensity,haptic_duration
+10101,1,1,1,I've found a faster route that saves five minutes. Would you like to switch?,14,2,2,5.6,medium,medium,medium,medium,medium,1.0
+10201,1,2,1,We're approaching your destination. Would you like me to find parking?,11,2,2,4.4,medium,medium,medium,medium,medium,1.0
+10301,1,3,1,Traffic is moving more smoothly in the next lane. Would you like to change lanes when it's safe?,18,2,3,7.2,medium,medium,medium,medium,medium,1.0
+10401,1,4,1,The lane next to you appears to be moving faster. Would you like to switch lanes now?,17,3,2,6.8,medium,medium,medium,medium,medium,1.0
+10501,1,5,1,Ben just sent you a message asking for a ride. Would you like me to add a stop to pick him up?,22,2,3,8.8,medium,medium,medium,medium,medium,1.0
+20101,2,1,1,"Traffic is getting slower, so this might be a good time to relax. Would you like to listen to some music?",21,1,2,8.4,medium,medium,medium,medium,medium,1.0
+20102,2,1,2,It's a nice day out there. Would you like some music?,11,1,1,4.4,medium,medium,medium,medium,medium,1.0
+20103,2,1,3,The cabin has been quiet for a while. Would you like to start a playlist?,15,1,2,6.0,medium,medium,medium,medium,medium,1.0
+20104,2,1,4,I've found a popular playlist that many are enjoying right now. Would you like to try what others are listening to?,21,1,3,8.4,medium,medium,medium,medium,medium,1.0
+20105,2,1,5,There's a featured playlist available right now. Would you like me to play it?,14,1,2,5.6,medium,medium,medium,medium,medium,1.0
+20201,2,2,1,There's a radio news and traffic update available right now. Would you like to listen to the radio?,18,2,3,7.2,medium,medium,medium,medium,medium,1.0
+20301,2,3,1,You've been driving for a while. Would you like me to order a coffee for you?,16,1,2,6.4,medium,medium,medium,medium,medium,1.0
+20401,2,4,1,You have a package that's just been delivered. Would you like me to remind you when you arrive at your destination?,21,2,3,8.4,medium,medium,medium,medium,medium,1.0
+20501,2,5,1,The weather forecast says it may start raining soon. Would you like me to close the windows at home for you?,21,3,3,8.4,medium,medium,medium,medium,medium,1.0

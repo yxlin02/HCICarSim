@@ -78,8 +78,10 @@ def compute_drive_u(
 # 3. Initial state from prior
 # =========================
 
-def compute_x0_from_prior(prior_accept_prob, kappa=1.0):
-    return kappa * safe_logit(prior_accept_prob)
+def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.05, eps=1e-6):
+    p = prior_accept_prob + np.random.normal(0, noise_std)
+    p = np.clip(p, eps, 1 - eps)
+    return kappa * safe_logit(p)
 
 
 # =========================

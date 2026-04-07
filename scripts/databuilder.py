@@ -110,6 +110,7 @@ def _get_window_slice(df_car, time_col, center_t, start_offset_ms, end_offset_ms
 
 def build_per_reaction_df(
     data_dict,
+    intensity_dict=None,
     pre_window_ms=2000,
     post_window_ms=5000,
     default_prior_accept_prob=0.5,
@@ -132,7 +133,9 @@ def build_per_reaction_df(
 
     for sub_key, scenes in data_dict.items():
         sub = int(sub_key.split("_")[1])
-        mode = "auto" if sub % 2 == 0 else "manual"
+        # auto as 0, manual as 1
+        mode = 0 if sub % 2 == 0 else 1
+
 
         for scene_key, trial in scenes.items():
             df_marker = trial["marker"].copy()
@@ -298,6 +301,7 @@ def build_per_reaction_df(
                 coherence = 0.0
 
                 df_pattern = trial.get("pattern", None)
+
                 if df_pattern is not None and len(df_pattern) > 0:
                     if "intensity" in df_pattern.columns:
                         intensity = df_pattern["intensity"].iloc[0]
@@ -308,6 +312,16 @@ def build_per_reaction_df(
                         coherence = df_pattern["coherence"].iloc[0]
                     elif "Coherence" in df_pattern.columns:
                         coherence = df_pattern["Coherence"].iloc[0]
+
+                if intensity_dict is not None:
+                    try:
+                        key = int(pattern_id)
+                        if key in intensity_dict:
+                            intensity = intensity_dict[key]
+                        else:
+                            print(f"[WARN] pattern_id {pattern_id} not found in intensity_dict")
+                    except Exception as e:
+                        print(f"[WARN] failed to cast pattern_id={pattern_id}: {e}")
                 
                 car_density_map = {
                     1: 0.2,
