@@ -78,7 +78,7 @@ def compute_drive_u(
 # 3. Initial state from prior
 # =========================
 
-def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.05, eps=1e-6):
+def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.02, eps=1e-6):
     p = prior_accept_prob + np.random.normal(0, noise_std)
     p = np.clip(p, eps, 1 - eps)
     return kappa * safe_logit(p)
@@ -114,19 +114,15 @@ def decision_drift(
     a=1.2,
     gain=1.5,
     theta_dyn=0.0,
+    x_reject_rest=0,
+    stim_on=1.0,
     model="nonlinear_tanh",
 ):
-    """
-    Deterministic drift:
-        dx/dt = -lam * x + a * phi(x) + u
-    For linear model:
-        dx/dt = -lam * x + u
-    """
     if model == "linear":
-        return -lam * x + u
+        return -lam * (x - x_reject_rest) + u
 
     phi = nonlinear_phi(x, model=model, gain=gain, theta_dyn=theta_dyn)
-    return -lam * x + a * phi + u
+    return -lam * (x - x_reject_rest) + stim_on * a * phi + u
 
 
 # =========================
@@ -171,6 +167,7 @@ def apply_context_effects(
 
 def find_nullclines_1d(
     u,
+    stim_on = 1.0,
     lam=1.0,
     a=1.2,
     gain=1.5,
@@ -188,6 +185,7 @@ def find_nullclines_1d(
     y_grid = decision_drift(
         x_grid,
         u=u,
+        stim_on=stim_on,
         lam=lam,
         a=a,
         gain=gain,
@@ -228,6 +226,7 @@ def find_nullclines_1d(
 def classify_fixed_point_stability(
     x_star,
     u,
+    stim_on=1.0,
     lam=1.0,
     a=1.2,
     gain=1.5,
@@ -241,10 +240,10 @@ def classify_fixed_point_stability(
     unstable if > 0
     """
     f_plus = decision_drift(
-        x_star + eps, u=u, lam=lam, a=a, gain=gain, theta_dyn=theta_dyn, model=model
+        x_star + eps, u=u, lam=lam, a=a, gain=gain, theta_dyn=theta_dyn, stim_on=stim_on, model=model
     )
     f_minus = decision_drift(
-        x_star - eps, u=u, lam=lam, a=a, gain=gain, theta_dyn=theta_dyn, model=model
+        x_star - eps, u=u, lam=lam, a=a, gain=gain, theta_dyn=theta_dyn, stim_on=stim_on, model=model
     )
     deriv = (f_plus - f_minus) / (2.0 * eps)
 
@@ -263,6 +262,7 @@ def classify_fixed_point_stability(
 def simulate_decision_1d(
     x0,
     u,
+    stim_on,
     lam=1.0,
     a=1.2,
     gain=1.5,
@@ -317,6 +317,7 @@ def simulate_decision_1d(
         drift = decision_drift(
             x[k],
             u=u,
+            stim_on=stim_on,
             lam=lam_eff,
             a=a,
             gain=gain_eff,
@@ -332,6 +333,7 @@ def simulate_decision_1d(
 
     fixed_points = find_nullclines_1d(
         u=u,
+        stim_on=stim_on,
         lam=lam_eff,
         a=a,
         gain=gain_eff,
@@ -378,6 +380,7 @@ def simulate_decision_1d(
 
 def plot_phase_line_and_nullcline(
     u,
+    stim_on,
     lam=1.0,
     a=1.2,
     gain=1.5,
@@ -421,6 +424,7 @@ def plot_phase_line_and_nullcline(
     dxdt = decision_drift(
         x_grid,
         u=u,
+        stim_on=stim_on,
         lam=lam_eff,
         a=a,
         gain=gain_eff,
@@ -443,12 +447,13 @@ def plot_phase_line_and_nullcline(
             theta_dyn,
             linestyle="-",
             color="green",
-            linewidth=1.5,
+            linewidth=2.0,
             label=f"theta_dyn={theta_dyn:.2f}",
         )
 
     fixed_points = find_nullclines_1d(
         u=u,
+        stim_on=stim_on,
         lam=lam_eff,
         a=a,
         gain=gain_eff,
@@ -489,7 +494,7 @@ def plot_phase_line_and_nullcline(
             f"{fp:.2f}",
             rotation=0,
             va="bottom",
-            ha="center",
+            ha="left",
             fontsize=8,
         )
 
@@ -508,6 +513,7 @@ def plot_phase_line_and_nullcline(
 def plot_trajectories_different_x0(
     x0_list,
     u,
+    stim_on,
     lam=1.0,
     a=1.2,
     gain=1.5,
@@ -530,6 +536,7 @@ def plot_trajectories_different_x0(
 
     plot_phase_line_and_nullcline(
         u=u,
+        stim_on=stim_on,
         lam=lam,
         a=a,
         gain=gain,
@@ -565,13 +572,14 @@ def plot_trajectories_different_x0(
         dx0 = decision_drift(
             x0,
             u=u,
+            stim_on=stim_on,
             lam=lam_eff,
             a=a,
             gain=gain_eff,
             theta_dyn=theta_dyn,
             model=model,
         )
-        axes[0].scatter([x0], [dx0], s=30)
+        axes[0].scatter([x0], [dx0], s=50)
 
     all_fixed_points = None
 
@@ -579,6 +587,7 @@ def plot_trajectories_different_x0(
         result = simulate_decision_1d(
             x0=x0,
             u=u,
+            stim_on=stim_on,
             lam=lam,
             a=a,
             gain=gain,
@@ -601,11 +610,13 @@ def plot_trajectories_different_x0(
         all_fixed_points = result["fixed_points"]
         label = f"x0={x0:.2f}, final={result['x_final']:.2f}, accept={result['accept']}"
         axes[1].plot(result["t"], result["x"], label=label)
+        axes[1].scatter(0, [x0], s=50)
 
     axes[1].axhline(
         theta_readout,
-        linestyle="--",
-        linewidth=1,
+        linestyle="-",
+        linewidth=2,
+        color = 'green',
         label=f"theta_readout={theta_readout:.2f}",
     )
 
@@ -621,7 +632,7 @@ def plot_trajectories_different_x0(
                 model=model,
             )
             ls = "-" if stab == "stable" else "--"
-            axes[1].axhline(fp, linestyle=ls, linewidth=1, alpha=0.8)
+            axes[1].axhline(fp, linestyle=ls, linewidth=1.5, color="red", alpha=0.8, label=stab)
 
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t)")
@@ -668,6 +679,11 @@ def run_single_trial_demo(
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
     mode = row["mode"]
+    stim_on = stim_on_hill(
+        beta_c * coherence
+        + beta_i * intensity
+        + beta_ci * coherence * intensity
+    )
 
     x0 = compute_x0_from_prior(p0, kappa=kappa)
 
@@ -690,6 +706,7 @@ def run_single_trial_demo(
     result = simulate_decision_1d(
         x0=x0,
         u=u,
+        stim_on=stim_on,
         lam=lam,
         a=a,
         gain=gain,
@@ -737,6 +754,7 @@ def run_single_trial_demo(
     plot_trajectories_different_x0(
         x0_list=x0_list,
         u=u,
+        stim_on=stim_on,
         lam=lam,
         a=a,
         gain=gain,
@@ -798,6 +816,11 @@ def simulate_dataframe_decisions(
         car_density = float(row["car_density"])
         time_pressure = row["time_pressure"]
         mode = row["mode"]
+        stim_on = stim_on_hill(
+            beta_c * coherence
+            + beta_i * intensity
+            + beta_ci * coherence * intensity
+        )
 
         x0 = compute_x0_from_prior(p0, kappa=kappa)
 
@@ -820,6 +843,7 @@ def simulate_dataframe_decisions(
         result = simulate_decision_1d(
             x0=x0,
             u=u,
+            stim_on=stim_on,
             lam=lam,
             a=a,
             gain=gain,
@@ -902,6 +926,11 @@ def inspect_single_trial_phase_portrait(
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
     mode = row["mode"]
+    stim_on = stim_on_hill(
+        beta_c * coherence
+        + beta_i * intensity
+        + beta_ci * coherence * intensity
+    )
 
     x0 = compute_x0_from_prior(p0, kappa=kappa)
 
@@ -938,6 +967,7 @@ def inspect_single_trial_phase_portrait(
     fig, ax = plt.subplots(figsize=(6, 4))
     plot_phase_line_and_nullcline(
         u=u,
+        stim_on=stim_on,
         lam=lam,
         a=a,
         gain=gain,
@@ -960,6 +990,7 @@ def inspect_single_trial_phase_portrait(
     dx0 = decision_drift(
         x0,
         u=u,
+        stim_on=stim_on,
         lam=lam_eff,
         a=a,
         gain=gain_eff,
@@ -1011,3 +1042,126 @@ DEFAULT_NONLINEAR_SIGMOID_PARAMS = dict(
     theta_dyn=0.0,
     theta_readout=0.0,
 )
+
+# =============================
+# return dynamical correction
+# =============================
+
+def build_dynamical_correction_features(
+    df,
+    beta_c=1.2,
+    beta_i=0.8,
+    beta_ci=0.5,
+    gamma_throttle=1.0,
+    gamma_density=0.0,
+    gamma_time=0.0,
+    gamma_mode=0.0,
+    kappa=1.0,
+    lam=1.0,
+    a=1.8,
+    gain=2.0,
+    theta_dyn=0.0,
+    sigma=0.0,
+    dt=0.01,
+    T=5.0,
+    theta_readout=0.0,
+):
+    records = []
+
+    for idx, row in df.iterrows():
+        p0 = float(row["subject_prior_accept_prob_subcategory"])
+        coherence = float(row["coherence"])
+        intensity = float(row["intensity"])
+        throttle_pressure = float(row["var_throttle_pre2s"])
+        car_density = float(row["car_density"])
+        time_pressure = row["time_pressure"]
+        mode = row["mode"]
+        stim_on = stim_on_hill(
+            beta_c * coherence
+            + beta_i * intensity
+            + beta_ci * coherence * intensity
+        )
+
+        x0 = compute_x0_from_prior(p0, kappa=kappa, noise_std=0.0)
+
+        u = compute_drive_u(
+            coherence=coherence,
+            intensity=intensity,
+            throttle_pressure=throttle_pressure,
+            car_density=car_density,
+            time_pressure=time_pressure,
+            mode=mode,
+            beta_c=beta_c,
+            beta_i=beta_i,
+            beta_ci=beta_ci,
+            gamma_throttle=gamma_throttle,
+            gamma_density=gamma_density,
+            gamma_time=gamma_time,
+            gamma_mode=gamma_mode,
+        )
+
+        res_linear = simulate_decision_1d(
+            x0=x0,
+            u=u,
+            stim_on=stim_on,
+            lam=lam,
+            a=0.0,
+            gain=gain,
+            theta_dyn=theta_dyn,
+            car_density=car_density,
+            time_pressure=time_pressure,
+            mode=mode,
+            sigma=sigma,
+            dt=dt,
+            T=T,
+            theta_readout=theta_readout,
+            model="linear",
+            random_state=0,
+        )
+
+        res_nl = simulate_decision_1d(
+            x0=x0,
+            u=u,
+            stim_on=stim_on,
+            lam=lam,
+            a=a,
+            gain=gain,
+            theta_dyn=theta_dyn,
+            car_density=car_density,
+            time_pressure=time_pressure,
+            mode=mode,
+            sigma=sigma,
+            dt=dt,
+            T=T,
+            theta_readout=theta_readout,
+            model="nonlinear_tanh",
+            random_state=0,
+        )
+
+        xT_linear = res_linear["x_final"]
+        xT_nl = res_nl["x_final"]
+
+        records.append({
+            "idx": idx,
+            "x0": x0,
+            "u": u,
+            "xT_linear": xT_linear,
+            "xT_nonlinear": xT_nl,
+            "delta_from_prior": xT_nl - x0,
+            "delta_nonlinear_extra": xT_nl - xT_linear,
+            "accept_true": row["accept"] if "accept" in row else np.nan,
+        })
+
+    return pd.DataFrame(records)
+
+# ==============================
+# stim_on gating function
+# ==============================
+def stim_on_hill(stim_raw, K=0.1, n=2.0):
+    s = np.maximum(stim_raw, 0.0)
+    return (s**n) / (K**n + s**n + 1e-12)
+
+def stim_on_clipped_linear(stim_raw, theta0=0.1, theta1=1.0):
+    if theta1 <= theta0:
+        raise ValueError("theta1 must be > theta0")
+    return np.clip((stim_raw - theta0) / (theta1 - theta0), 0.0, 1.0)
