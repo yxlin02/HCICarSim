@@ -85,9 +85,9 @@ void USys_MozaInputComponent::EndPlay(EEndPlayReason::Type EndPlayReason)
 
 void USys_MozaInputComponent::OnMozaSteeringChanged(float SteeringAngle)
 {
-    if (!VehicleMovement) { return; }
+    /*if (!VehicleMovement) { return; }
     const float Normalized = FMath::Clamp(SteeringAngle / MaxSteeringAngle, -1.0f, 1.0f);
-    VehicleMovement->SetSteeringInput(Normalized);
+    VehicleMovement->SetSteeringInput(Normalized);*/
 }
 
 void USys_MozaInputComponent::OnMozaThrottleChanged(float ThrottleValue)
