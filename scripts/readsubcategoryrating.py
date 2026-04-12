@@ -89,3 +89,57 @@ def format_prior(df_subject_prior):
         df_subject_prior[col] /= 100.0
     
     return df_subject_prior
+
+def format_prior(df_subject_prior):
+    SUB_NUM_COL = ["Q3",]
+    SUBCATEGORY_COLS = [ "101", "102", "103", "104", "105", "201", "202", "203", "204", "205",]
+
+    df_subject_prior = df_subject_prior[
+        [col for col in df_subject_prior.columns if col in SUBCATEGORY_COLS + SUB_NUM_COL]
+    ]
+
+    assert len(df_subject_prior.columns) == len(SUBCATEGORY_COLS + SUB_NUM_COL), "missing columns in df!!!"
+
+    df_subject_prior = df_subject_prior.rename(columns={
+        "Q3": "sub_id",
+    })
+
+    df_subject_prior = (
+        df_subject_prior.iloc[2:]
+        .reset_index(drop=True)
+        .apply(pd.to_numeric, errors="coerce")
+        .astype("Int16")
+    )
+
+    for col in SUBCATEGORY_COLS:
+        df_subject_prior[col] /= 100.0
+    
+    return df_subject_prior
+
+def format_demographics(df_demographics):
+    COL_DICT = {
+        "Q1": "age",
+        "Q2": "gender",
+        "Q3": "nationality",
+        "Q4": "georgia tech faculty",
+        "Q5": "driver license",
+        "Q6": "education level",
+        "Q7": "driving frequency",
+        "Q8": "driving experience",
+        "Q9": "in-car ai agent experience",
+        "Q11": "dominant hand",
+        "Q12": "sub_id",
+    }
+
+    df_demographics = df_demographics[
+        [col for col in df_demographics.columns if col in COL_DICT.keys()]
+    ]
+
+    df_demographics = df_demographics.rename(columns=COL_DICT)
+
+    df_demographics = (
+        df_demographics.iloc[2:]
+        .reset_index(drop=True)
+    )
+
+    return df_demographics
