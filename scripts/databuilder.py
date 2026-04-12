@@ -47,6 +47,12 @@ SUBJECT_TYPE_PRIOR_DICT = {
     (21, 2): 0.875000,
     (22, 1): 0.666667,
     (22, 2): 0.666667,
+    (23, 1): 0.800000,
+    (23, 2): 0.733333,
+    (24, 1): 0.800000,
+    (24, 2): 0.733333,
+    (26, 1): 0.800000,
+    (26, 2): 0.666667,
 }
 
 def _safe_mean(x):
@@ -113,6 +119,7 @@ def build_per_reaction_df(
     intensity_dict=None,
     pre_window_ms=2000,
     post_window_ms=5000,
+    df_subject_prior:pd.DataFrame=None,
     default_prior_accept_prob=0.5,
     default_eval_value=np.nan,
 ):
@@ -341,10 +348,21 @@ def build_per_reaction_df(
                     6: 1,
                 }
 
-                subject_prior_accept_prob_subcategory = SUBJECT_TYPE_PRIOR_DICT.get(
-                    (sub, rec_category),
-                    default_prior_accept_prob
-                )
+                if df_subject_prior is not None:
+                    row = df_subject_prior[df_subject_prior["sub_id"] == sub]
+
+                    if len(row) == 0:
+                        subject_prior_accept_prob_subcategory = SUBJECT_TYPE_PRIOR_DICT.get(
+                            (sub, rec_category),
+                            default_prior_accept_prob
+                        )
+                    else:
+                        subject_prior_accept_prob_subcategory = row.iloc[0][f"{rec_subcategory}"]
+                else:
+                    subject_prior_accept_prob_subcategory = SUBJECT_TYPE_PRIOR_DICT.get(
+                        (sub, rec_category),
+                        default_prior_accept_prob
+                    )
 
                 records.append({
                     # ---------------- meta ----------------
