@@ -13,25 +13,49 @@ def format(df_subcategory_rating):
         "Q1.3": "block_id"
     })
 
+    # -----------------------------
+    # 处理 version
+    # -----------------------------
+    if "Q44" in df_subcategory_rating.columns:
+        df_subcategory_rating = df_subcategory_rating.rename(columns={"Q44": "version"})
+    else:
+        df_subcategory_rating["version"] = "default"
+
+    # -----------------------------
+    # 清理数据
+    # -----------------------------
     df_subcategory_rating = (
         df_subcategory_rating.iloc[2:]
         .reset_index(drop=True)
+    )
+
+    # version 不能强制转 numeric
+    numeric_cols = df_subcategory_rating.columns.difference(["version"])
+
+    df_subcategory_rating[numeric_cols] = (
+        df_subcategory_rating[numeric_cols]
         .apply(pd.to_numeric, errors="coerce")
         .astype("Int16")
     )
 
+    # -----------------------------
+    # rating 列
+    # -----------------------------
     rating_cols = [
         col for col in df_subcategory_rating.columns
         if re.match(r"^Q\d+\.[234]$", col)
     ]
 
     df_long = df_subcategory_rating.melt(
-        id_vars=["sub_id", "mode", "block_id"],
+        id_vars=["sub_id", "mode", "block_id", "version"],
         value_vars=rating_cols,
         var_name="question",
         value_name="rating"
     )
 
+    # -----------------------------
+    # 解析 question
+    # -----------------------------
     df_long[["q_num", "score_type"]] = df_long["question"].str.extract(r"^Q(\d+)\.(\d)$")
 
     df_long["q_num"] = df_long["q_num"].astype(int)
@@ -46,8 +70,11 @@ def format(df_subcategory_rating):
     }
     df_long["score_type"] = df_long["score_type"].map(score_map)
 
+    # -----------------------------
+    # pivot
+    # -----------------------------
     df_long = df_long.pivot_table(
-        index=["sub_id", "mode", "block_id", "trial_id"],
+        index=["sub_id", "mode", "block_id", "version", "trial_id"],
         columns="score_type",
         values="rating",
         aggfunc="first"
@@ -56,8 +83,8 @@ def format(df_subcategory_rating):
     df_long.columns.name = None
 
     df_long = df_long[
-        ["sub_id", "mode", "block_id", "trial_id",
-        "appropriateness", "disturbance", "satisfaction"]
+        ["sub_id", "mode", "block_id", "version", "trial_id",
+         "appropriateness", "disturbance", "satisfaction"]
     ]
 
     assert len(df_long["trial_id"].unique()) == 10

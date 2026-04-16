@@ -145,6 +145,19 @@ def build_per_reaction_df(
 
 
         for scene_key, trial in scenes.items():
+
+            if scene_key == "scene_4":
+                coherence = 1.0
+                scene_key = "scene_3"
+                version = "personalized"
+            elif scene_key == "scene_5":
+                coherence = 0.0
+                scene_key = "scene_3"
+                version = "personified"
+            else:
+                coherence = 0.0
+                version = "default"
+    
             df_marker = trial["marker"].copy()
             df_car = trial["car"].copy()
             df_subcategory_rating = trial["subcategory_rating"].copy()
@@ -209,7 +222,7 @@ def build_per_reaction_df(
                     df_subcategory_rating["trial_id"] == trial_id
                 ]
 
-                assert len(subset) == 1, f"Expected 1 row, got {len(subset)}"
+                assert len(subset) == 1, f"{sub_key}-{scene_key}-trial{trial_id}: Expected 1 row, got {len(subset)}"
 
                 appropriateness = subset["appropriateness"].iloc[0] if "appropriateness" in subset.columns else default_eval_value
                 disturbance = subset["disturbance"].iloc[0] if "disturbance" in subset.columns else default_eval_value
@@ -305,7 +318,6 @@ def build_per_reaction_df(
                 # ---------- pattern-level scenario features ----------
                 # default NaN first
                 intensity = 0.5
-                coherence = 0.0
 
                 df_pattern = trial.get("pattern", None)
 
@@ -314,11 +326,6 @@ def build_per_reaction_df(
                         intensity = df_pattern["intensity"].iloc[0]
                     elif "Intensity" in df_pattern.columns:
                         intensity = df_pattern["Intensity"].iloc[0]
-
-                    if "coherence" in df_pattern.columns:
-                        coherence = df_pattern["coherence"].iloc[0]
-                    elif "Coherence" in df_pattern.columns:
-                        coherence = df_pattern["Coherence"].iloc[0]
 
                 if intensity_dict is not None:
                     try:
@@ -369,6 +376,7 @@ def build_per_reaction_df(
                     "sub_id": sub,
                     "scene_id": scene_key,
                     "mode": mode,
+                    "version": version,
                     "trial_id": trial_id,
                     "recommendation": recommendation,
                     "recommendation_category": rec_category,
