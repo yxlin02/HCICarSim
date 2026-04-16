@@ -148,7 +148,7 @@ def format_demographics(df_demographics):
         "Q1": "age",
         "Q2": "gender",
         "Q3": "nationality",
-        "Q4": "georgia tech faculty",
+        "Q4": "georgia tech faculty or student",
         "Q5": "driver license",
         "Q6": "education level",
         "Q7": "driving frequency",
