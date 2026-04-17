@@ -133,6 +133,33 @@ def plot_metric_by_group_across_subcategories(
                 ax=ax
             )
 
+        sub_group_median = sub_df.groupby(group)[metric].median()
+
+        # 获取 x 轴 label -> tick 的映射
+        xticks = {label.get_text(): tick for tick, label in enumerate(ax.get_xticklabels())}
+
+        # default 的位置和数值
+        if "default" in xticks:
+            x0 = xticks["default"]
+            y0 = sub_group_median.get("default", np.nan)
+
+            for g, x1 in xticks.items():
+                if g == "default":
+                    continue
+
+                y1 = sub_group_median.get(g, np.nan)
+
+                if np.isnan(y0) or np.isnan(y1):
+                    continue
+                ax.plot(
+                    [x0, x1],
+                    [y0, y1],
+                    color="gray",
+                    linewidth=1
+                )
+                ax.scatter([x0, x1], [y0, y1], color="gray", s=10, zorder=3)
+
+
         ax.set_title(f"{subcat}")
         ax.set_xlabel("")
         ax.set_ylabel(metric if (not sharey or i % ncols == 0) else "")
@@ -152,7 +179,7 @@ def plot_metric_by_group_across_subcategories(
         title = f"{metric} by {group} across {subcategory_col}"
 
     fig.suptitle(title, fontsize=14)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout(h_pad=3.0,rect=[0, 0, 1, 0.98])
 
     if legend_handles is not None:
         fig.legend(

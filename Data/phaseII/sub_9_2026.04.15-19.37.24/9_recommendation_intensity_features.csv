@@ -1,0 +1,11 @@
+id,category,subcategory,item,recommendation_text,word_count,content_urgency,content_info_load,sound_duration,sound_volume,sound_pitch,visual_complexity,visual_size,haptic_intensity,haptic_duration
+10101,1,1,1,I found a route that lets you avoid traffic. Would you like me to switch?,15,2,2,5.7,medium,high,high,medium,high,1.0
+10201,1,2,1,We are near your destination. Would you like me to find the cheapest parking?,14,2,2,5.4,medium,high,high,medium,high,1.0
+10301,1,3,1,Traffic is moving more smoothly in the right lane. Would you like me to switch?,15,2,3,5.4,medium,high,high,medium,high,1.0
+10401,1,4,1,Traffic is moving more smoothly in the right lane. Would you like me to switch?,15,3,2,5.4,medium,high,high,medium,high,1.0
+10501,1,5,1,Ben is asking for a ride. Would you like me to pick him up?,14,2,3,4.6,medium,high,high,medium,high,1.0
+20101,2,1,1,"The cabin has been quiet. Would you like me to start a playlist, like Our Wrenally - t+pazolite?",18,1,2,7.8,medium,high,high,medium,high,1.0
+20201,2,2,1,There’s a radio update available. Would you like me to play your usual music radio?,16,2,3,6.1,medium,high,high,medium,high,1.0
+20301,2,3,1,"You’ve been driving for a while. Would you like me to grab you something, like White Monster?",18,1,2,5.8,medium,high,high,medium,high,1.0
+20401,2,4,1,A package was just delivered. Would you like me to leave it for now?,14,2,3,4.8,medium,high,high,medium,high,1.0
+20501,2,5,1,It may rain soon. Would you like me to close the windows at home?,14,3,3,5.1,medium,high,high,medium,high,1.0
