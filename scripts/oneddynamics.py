@@ -439,6 +439,8 @@ def plot_phase_line_and_nullcline(
     else:
         label = r'$\dot{x}=-\lambda_{eff} x + a(2\sigma(g_{eff}(x-\theta_{dyn}))-1) + u$'
 
+    label = None
+
     ax.plot(x_grid, dxdt, color="blue", label=label)
     ax.axhline(0.0, linestyle="--", color="black", linewidth=1)
 

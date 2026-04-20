@@ -553,7 +553,7 @@ def plot_trajectories_from_inits(
     )
     if ok:
         axes[0].scatter([xf], [yf], color="black", s=60, marker="X", label="fixed point")
-        axes[0].legend(fontsize=8)
+        # axes[0].legend(fontsize=8)
 
     for i, (x0, y0) in enumerate(init_points):
         res = simulate_2d_decision_system(
@@ -772,6 +772,8 @@ def run_single_trial_demo_2d(
         dt=dt,
         T=T,
         decision_threshold=decision_threshold,
+        xlim=(-2,2),
+        ylim=(-2,2),
     )
 
     return {
