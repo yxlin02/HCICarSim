@@ -383,15 +383,15 @@ def build_per_reaction_df(
                     "recommendation_subcategory": rec_subcategory,
 
                     # ---------------- prior ----------------
-                    "subject_prior_accept_prob_subcategory": subject_prior_accept_prob_subcategory if not pd.isna(subject_prior_accept_prob_subcategory) else default_prior_accept_prob,
+                    "subject_prior": subject_prior_accept_prob_subcategory if not pd.isna(subject_prior_accept_prob_subcategory) else default_prior_accept_prob,
                     # "prior_mean_steering_input": float(steering_mean_all),
                     # "prior_var_steering_input": float(steering_var_all),
                     "prior_mean_throttle_input": float(throttle_mean_all),
                     "prior_var_throttle_input": float(throttle_var_all),
 
                     # ---------------- scenario ----------------
-                    "intensity": intensity,
-                    "coherence": coherence,
+                    "recommendation_intensity": intensity,
+                    "recommendation_coherence": coherence,
                     # "mean_steering_input_zscore_pre2s": mean_steering_z_pre2s,
                     "mean_throttle_input_zscore_pre2s": mean_throttle_z_pre2s,
                     "mean_throttle_pre2s": mean_throttle_pre2s,

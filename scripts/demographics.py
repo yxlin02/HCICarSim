@@ -79,7 +79,7 @@ def plot_demographics(
         categorical_cols = [
             "gender",
             "nationality",
-            "georgia tech faculty",
+            "georgia tech faculty or student",
             "driver license",
             "education level",
             "driving frequency",

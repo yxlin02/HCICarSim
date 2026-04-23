@@ -642,9 +642,9 @@ def run_single_trial_demo_2d(
     symmetric_gate=False,
     y_gate_scale=1.0,
 ):
-    p0 = float(row["subject_prior_accept_prob_subcategory"])
-    coherence = float(row["coherence"])
-    intensity = float(row["intensity"])
+    p0 = float(row["subject_prior"])
+    coherence = float(row["recommendation_coherence"])
+    intensity = float(row["recommendation_intensity"])
     throttle_pressure = float(row["var_throttle_pre2s"])
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
@@ -832,9 +832,9 @@ def simulate_dataframe_2d(
     records = []
 
     for idx, row in df.iterrows():
-        p0 = float(row["subject_prior_accept_prob_subcategory"])
-        coherence = float(row["coherence"])
-        intensity = float(row["intensity"])
+        p0 = float(row["subject_prior"])
+        coherence = float(row["recommendation_coherence"])
+        intensity = float(row["recommendation_intensity"])
         throttle_pressure = float(row["var_throttle_pre2s"])
         car_density = float(row["car_density"])
         time_pressure = row["time_pressure"]
@@ -921,8 +921,8 @@ def simulate_dataframe_2d(
             "idx": idx,
             "prior_accept_prob": p0,
             "prior_logit": drives["prior_logit"],
-            "coherence": coherence,
-            "intensity": intensity,
+            "recommendation_coherence": coherence,
+            "recommendation_intensity": intensity,
             "throttle_pressure": throttle_pressure,
             "car_density": car_density,
             "time_pressure": normalize_time_pressure(time_pressure),
@@ -1007,9 +1007,9 @@ def build_dynamical_correction_features(
     records = []
 
     for idx, row in df.iterrows():
-        p0 = float(row["subject_prior_accept_prob_subcategory"])
-        coherence = float(row["coherence"])
-        intensity = float(row["intensity"])
+        p0 = float(row["subject_prior"])
+        coherence = float(row["recommendation_coherence"])
+        intensity = float(row["recommendation_intensity"])
         throttle_pressure = float(row["var_throttle_pre2s"])
         car_density = float(row["car_density"])
         time_pressure = row["time_pressure"]

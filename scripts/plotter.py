@@ -130,6 +130,7 @@ def plot_metric_by_group_across_subcategories(
                 order=order,
                 palette=palette,
                 errorbar="se",
+                edgecolor="black",
                 ax=ax
             )
 
@@ -159,11 +160,11 @@ def plot_metric_by_group_across_subcategories(
                 )
                 ax.scatter([x0, x1], [y0, y1], color="gray", s=10, zorder=3)
 
-
         ax.set_title(f"{subcat}")
         ax.set_xlabel("")
-        ax.set_ylabel(metric if (not sharey or i % ncols == 0) else "")
-        ax.tick_params(axis="x", rotation=rotate_xticks)
+        ax.set_ylabel("")
+        # ax.set_ylabel(metric if (not sharey or i % ncols == 0) else "")
+        ax.tick_params(axis="x", rotation=rotate_xticks, labelsize=8)
 
         if ax.get_legend() is not None:
             handles, labels = ax.get_legend_handles_labels()
@@ -179,7 +180,7 @@ def plot_metric_by_group_across_subcategories(
         title = f"{metric} by {group} across {subcategory_col}"
 
     fig.suptitle(title, fontsize=14)
-    fig.tight_layout(h_pad=3.0,rect=[0, 0, 1, 0.98])
+    fig.tight_layout(rect=[0, 0, 1, 0.98])
 
     if legend_handles is not None:
         fig.legend(
