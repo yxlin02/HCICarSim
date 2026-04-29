@@ -116,7 +116,6 @@ def _get_window_slice(df_car, time_col, center_t, start_offset_ms, end_offset_ms
 
 def build_per_reaction_df(
     data_dict,
-    intensity_dict=None,
     pre_window_ms=2000,
     post_window_ms=5000,
     df_subject_prior:pd.DataFrame=None,
@@ -145,18 +144,6 @@ def build_per_reaction_df(
 
 
         for scene_key, trial in scenes.items():
-
-            if scene_key == "scene_4":
-                coherence = 1.0
-                scene_key = "scene_3"
-                version = "personalized"
-            elif scene_key == "scene_5":
-                coherence = 0.0
-                scene_key = "scene_3"
-                version = "personified"
-            else:
-                coherence = 0.0
-                version = "default"
     
             df_marker = trial["marker"].copy()
             df_car = trial["car"].copy()
@@ -319,24 +306,27 @@ def build_per_reaction_df(
                 # default NaN first
                 intensity = 0.5
 
-                df_pattern = trial.get("pattern", None)
+                try:
+                    key = int(pattern_id)
+                    if key in data_dict[sub_key][scene_key]['stimuli_intensity']:
+                        intensity = data_dict[sub_key][scene_key]['stimuli_intensity'][key]
+                    else:
+                        print(f"[WARN] pattern_id {pattern_id} not found in intensity_dict")
+                except Exception as e:
+                    print(f"[WARN] failed to cast pattern_id={sub_key, scene_key, pattern_id}: {e}")
 
-                if df_pattern is not None and len(df_pattern) > 0:
-                    if "intensity" in df_pattern.columns:
-                        intensity = df_pattern["intensity"].iloc[0]
-                    elif "Intensity" in df_pattern.columns:
-                        intensity = df_pattern["Intensity"].iloc[0]
-
-                if intensity_dict is not None:
-                    try:
-                        key = int(pattern_id)
-                        if key in intensity_dict:
-                            intensity = intensity_dict[key]
-                        else:
-                            print(f"[WARN] pattern_id {pattern_id} not found in intensity_dict")
-                    except Exception as e:
-                        print(f"[WARN] failed to cast pattern_id={pattern_id}: {e}")
-                
+                if scene_key == "scene_4":
+                    coherence = 1.0
+                    # scene_key = "scene_3"
+                    version = "personalized"
+                elif scene_key == "scene_5":
+                    coherence = 0.0
+                    # scene_key = "scene_3"
+                    version = "personified"
+                else:
+                    coherence = 0.0
+                    version = "default"
+                    
                 car_density_map = {
                     1: 0.2,
                     2: 0.8,
