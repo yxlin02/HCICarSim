@@ -281,25 +281,43 @@ def build_per_reaction_df(
 
                 # ---------- reaction window zscores ----------
                 if len(df_post) > 0:
-                    # post_steer_z = _zscore_with_ref(
-                    #     df_post["steering_input"].to_numpy(),
-                    #     steering_mean_all,
-                    #     steering_std_all
-                    # )
+                    post_throttle = df_post["throttle_input"].to_numpy()
+
                     post_throttle_z = _zscore_with_ref(
-                        df_post["throttle_input"].to_numpy(),
+                        post_throttle,
                         throttle_mean_all,
                         throttle_std_all
                     )
-                    # mean_steering_z_post5s = _safe_mean(post_steer_z)
+
                     mean_throttle_z_post5s = _safe_mean(post_throttle_z)
                     mean_throttle_post5s = df_post["throttle_input"].mean()
                     var_throttle_post5s = _safe_var(df_post["throttle_input"])
+
+                    # ---------- NEW: AUC (baseline corrected) ----------
+                    if len(df_pre) > 0:
+                        baseline = mean_throttle_pre2s
+
+                        if car_time_col in df_post.columns:
+                            t = df_post[car_time_col].to_numpy()
+                            t = (t - t[0]) / 1000.0
+                            auc_throttle_post5s = np.trapz(post_throttle - baseline, t)
+                        else:
+                            auc_throttle_post5s = np.trapz(post_throttle - baseline)
+
+                    else:
+                        auc_throttle_post5s = np.nan
+
                 else:
-                    # mean_steering_z_post5s = np.nan
+                    print(f"{sub_key}-{scene_key}-trial{trial_id}: no data in post-reaction window")
                     mean_throttle_z_post5s = np.nan
                     mean_throttle_post5s = np.nan
                     var_throttle_post5s = np.nan
+                    auc_throttle_post5s = np.nan
+
+                delta_throttle_post5s = (
+                    mean_throttle_post5s - mean_throttle_pre2s
+                    if len(df_pre) > 0 else np.nan
+                )
 
 
                 # ---------- pattern-level scenario features ----------
@@ -397,6 +415,8 @@ def build_per_reaction_df(
                     "mean_throttle_input_zscore_post5s": mean_throttle_z_post5s,
                     "mean_throttle_post5s": mean_throttle_post5s,
                     "var_throttle_post5s": var_throttle_post5s,
+                    "delta_throttle_post5s": delta_throttle_post5s,
+                    "auc_throttle_post5s": auc_throttle_post5s,
 
                     # ---------------- evaluation ----------------
                     "appropriateness": appropriateness,
