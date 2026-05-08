@@ -78,10 +78,10 @@ def compute_drive_u(
 # 3. Initial state from prior
 # =========================
 
-def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.02, eps=1e-6):
+def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.02, eps=1e-6, b_use_logits=False):
     p = prior_accept_prob + np.random.normal(0, noise_std)
     p = np.clip(p, eps, 1 - eps)
-    return kappa * safe_logit(p)
+    return kappa * safe_logit(p) if b_use_logits else kappa * (p - 0.5)
 
 
 # =========================
@@ -444,14 +444,14 @@ def plot_phase_line_and_nullcline(
     ax.plot(x_grid, dxdt, color="blue", label=label)
     ax.axhline(0.0, linestyle="--", color="black", linewidth=1)
 
-    if model != "linear":
-        ax.axvline(
-            theta_dyn,
-            linestyle="-",
-            color="green",
-            linewidth=2.0,
-            label=f"theta_dyn={theta_dyn:.2f}",
-        )
+    # if model != "linear":
+    #     ax.axvline(
+    #         theta_dyn,
+    #         linestyle="-",
+    #         color="green",
+    #         linewidth=2.0,
+    #         label=f"theta_dyn={theta_dyn:.2f}",
+    #     )
 
     fixed_points = find_nullclines_1d(
         u=u,
@@ -502,8 +502,8 @@ def plot_phase_line_and_nullcline(
 
     ax.set_xlabel("x")
     ax.set_ylabel("dx/dt")
-    ax.set_title(f"1D Phase Line / Nullcline ({model})")
-    ax.legend(bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
+    ax.set_title(f"1D Phase Line")
+    ax.legend(bbox_to_anchor=(0, 0), loc="lower left", fontsize=8)
 
     return ax, fixed_points
 
@@ -534,7 +534,15 @@ def plot_trajectories_different_x0(
     auto_lam_multiplier=1.2,
     auto_sigma_multiplier=0.7,
 ):
-    fig, axes = plt.subplots(1, 2, figsize=(15, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+
+    axes[0].axvline(
+        theta_readout,
+        linestyle="-",
+        color="green",
+        linewidth=2.0,
+        label=f"theta_dyn={theta_readout:.2f}",
+    )
 
     plot_phase_line_and_nullcline(
         u=u,
@@ -611,7 +619,8 @@ def plot_trajectories_different_x0(
         )
         all_fixed_points = result["fixed_points"]
         label = f"x0={x0:.2f}, final={result['x_final']:.2f}, accept={result['accept']}"
-        axes[1].plot(result["t"], result["x"], label=label)
+        # axes[1].plot(result["t"], result["x"], label=label)
+        axes[1].plot(result["t"], result["x"])
         axes[1].scatter(0, [x0], s=50)
 
     axes[1].axhline(
@@ -622,6 +631,7 @@ def plot_trajectories_different_x0(
         label=f"theta_readout={theta_readout:.2f}",
     )
 
+    checked_stab = set()
     if all_fixed_points is not None:
         for fp in all_fixed_points:
             stab, _ = classify_fixed_point_stability(
@@ -633,13 +643,14 @@ def plot_trajectories_different_x0(
                 theta_dyn=theta_dyn,
                 model=model,
             )
+            checked_stab.add(stab)
             ls = "-" if stab == "stable" else "--"
-            axes[1].axhline(fp, linestyle=ls, linewidth=1.5, color="red", alpha=0.8, label=stab)
+            axes[1].axhline(fp, linestyle=ls, linewidth=1.5, color="red", alpha=0.8, label=stab if stab not in checked_stab else None)
 
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t)")
-    axes[1].set_title(f"Trajectories from Different Initial States ({model})")
-    axes[1].legend(bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
+    axes[1].set_title(f"Trajectories")
+    # axes[1].legend(bbox_to_anchor=(0, 0), loc="lower left", fontsize=8)
 
     plt.tight_layout()
     plt.show()
@@ -686,7 +697,7 @@ def run_single_trial_demo(
         + beta_i * intensity
         + beta_ci * coherence * intensity
     )
-
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
     x0 = compute_x0_from_prior(p0, kappa=kappa)
 
     u = compute_drive_u(
@@ -752,7 +763,7 @@ def run_single_trial_demo(
                 f"{item['stability']}, slope={item['slope']:.3f}"
             )
 
-    x0_list = [x0 - 2.0, x0 - 1.0, x0, x0 + 1.0, x0 + 2.0]
+    x0_list = [compute_x0_from_prior(x0, noise_std=0.5) for _ in range(10)]
     plot_trajectories_different_x0(
         x0_list=x0_list,
         u=u,
@@ -809,6 +820,7 @@ def simulate_dataframe_decisions(
     auto_sigma_multiplier=0.7,
 ):
     records = []
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
 
     for idx, row in df.iterrows():
         p0 = float(row["subject_prior"])
@@ -824,6 +836,7 @@ def simulate_dataframe_decisions(
             + beta_ci * coherence * intensity
         )
 
+        
         x0 = compute_x0_from_prior(p0, kappa=kappa)
 
         u = compute_drive_u(
@@ -933,6 +946,7 @@ def inspect_single_trial_phase_portrait(
         + beta_i * intensity
         + beta_ci * coherence * intensity
     )
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
 
     x0 = compute_x0_from_prior(p0, kappa=kappa)
 
@@ -1069,6 +1083,7 @@ def build_dynamical_correction_features(
     theta_readout=0.0,
 ):
     records = []
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
 
     for idx, row in df.iterrows():
         p0 = float(row["subject_prior"])

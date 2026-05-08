@@ -58,6 +58,42 @@ def tlx_format(csv_path):
 
     return df
 
+def test_version_effect_full(df, metric="tlx_overall"):
+    import statsmodels.formula.api as smf
+    from itertools import combinations
+    from scipy.stats import ttest_rel
+    from statsmodels.stats.multitest import multipletests
+
+    print("=== Global Effect (LMM) ===")
+    model = smf.mixedlm(
+        f"{metric} ~ C(version)",
+        df,
+        groups=df["sub_id"]
+    ).fit()
+    print(model.summary())
+
+    print("\n=== Pairwise Comparisons ===")
+
+    pivot = df.pivot_table(
+        index="sub_id",
+        columns="version",
+        values=metric
+    ).dropna()
+
+    results = []
+    pvals = []
+
+    for v1, v2 in combinations(pivot.columns, 2):
+        t, p = ttest_rel(pivot[v1], pivot[v2])
+        results.append({"v1": v1, "v2": v2, "t": t, "p": p})
+        pvals.append(p)
+
+    _, pvals_fdr, _, _ = multipletests(pvals, method="fdr_bh")
+
+    for i in range(len(results)):
+        results[i]["p_fdr"] = pvals_fdr[i]
+
+    return pd.DataFrame(results)
 
 def test_version_effect(df, metric="tlx_overall", multitest_method="fdr_bh"):
     from itertools import combinations

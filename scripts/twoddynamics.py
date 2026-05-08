@@ -150,13 +150,16 @@ def compute_accept_reject_drives(
 # =========================================================
 # 3. Initial condition
 # =========================================================
+def bias_decision_threshold(decision_threshold=0.5, k_init=1.0, b_use_logits=False,)->float:
+    return safe_logit(k_init * decision_threshold) if b_use_logits else 2 * k_init * (decision_threshold - 0.5)
 
 def default_initial_condition(
     p0,
     k_init=1.0,
-    noise_std=0.02,
+    noise_std=0.01,
     rng=None,
     eps=1e-6,
+    b_use_logits=False,
 ):
     if rng is None:
         rng = np.random.default_rng()
@@ -164,9 +167,14 @@ def default_initial_condition(
     p = p0 + rng.normal(0, noise_std)
     p = np.clip(p, eps, 1 - eps)
 
-    bias = p - 0.5
-    x0 = k_init * bias
-    y0 = -k_init * bias
+    if b_use_logits:
+        x0 = k_init * safe_logit(p)
+        y0 = k_init * safe_logit(1-p)
+    else:
+        bias = p - 0.5
+        x0 = k_init * bias
+        y0 = -k_init * bias
+   
     return x0, y0
 
 
@@ -195,7 +203,7 @@ def generate_init_points_from_p0(p0, k_init=1.0, noise_std=0.05, n_points=7, rng
 # 4. Unified nonlinear 2D dynamics
 # =========================================================
 
-def phi_tanh(z, gain=1.0):
+def phi_tanh(z, gain=3.0):
     return np.tanh(gain * z)
 
 
@@ -248,6 +256,8 @@ def decision_drift_2d(
     gain_y=1.0,
     stim_on_x=1.0,
     stim_on_y=1.0,
+    a_stim_x=1.0,
+    a_stim_y=1.0,
 ):
     """
     Unified drift:
@@ -258,11 +268,11 @@ def decision_drift_2d(
         dx/dt = -lam_x * x + stim_on_x * tanh(gain_x * input_x)
         dy/dt = -lam_y * y + stim_on_y * tanh(gain_y * input_y)
     """
-    input_x = f_x + a_x * x - w_xy * y
-    input_y = f_y + a_y * y - w_yx * x
+    input_x = a_x * x - w_xy * y
+    input_y = a_y * y - w_yx * x
 
-    dxdt = -lam_x * x + stim_on_x * phi_tanh(input_x, gain=gain_x)
-    dydt = -lam_y * y + stim_on_y * phi_tanh(input_y, gain=gain_y)
+    dxdt = -lam_x * x + a_stim_x * stim_on_x * phi_tanh(input_x, gain=gain_x) + f_x 
+    dydt = -lam_y * y + a_stim_y * stim_on_y * phi_tanh(input_y, gain=gain_y) + f_y
     return dxdt, dydt
 
 
@@ -388,6 +398,7 @@ def plot_phase_plane(
     grid_n=21,
     contour_n=300,
     ax=None,
+    decision_threshold=0.0,
 ):
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 6))
@@ -427,20 +438,21 @@ def plot_phase_plane(
     ax.contour(Xc, Yc, Vc, levels=[0], linewidths=2, colors="C1")
 
     diag = np.linspace(max(xlim[0], ylim[0]), min(xlim[1], ylim[1]), 400)
-    ax.plot(diag, diag, linestyle="--", color="C2")
+    ax.plot(diag, diag - decision_threshold, linestyle="--", color="C2")
 
     legend_handles = [
         Line2D([0], [0], color="C0", lw=2, label="dx/dt = 0"),
         Line2D([0], [0], color="C1", lw=2, label="dy/dt = 0"),
-        Line2D([0], [0], color="C2", lw=1.5, linestyle="--", label="x = y boundary"),
+        Line2D([0], [0], color="C2", lw=1.5, linestyle="--", label="decision boundary"),
     ]
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
     ax.set_xlabel("accept state x")
     ax.set_ylabel("reject state y")
-    ax.set_title("2D nonlinear decision phase plane")
-    ax.legend(handles=legend_handles, bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
+    ax.set_title("Decision phase plane")
+    ax.legend(handles=legend_handles, bbox_to_anchor=(0.0, 0), loc="lower left", fontsize=8, frameon=True)
+    # ax.legend(handles=legend_handles, bbox_to_anchor=(1.00, 0), loc="lower left", fontsize=8, frameon=False)
     ax.set_aspect("equal", "box")
     return ax
 
@@ -517,7 +529,7 @@ def plot_trajectories_from_inits(
     xlim=(-4, 4),
     ylim=(-4, 4),
 ):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(9, 4))
 
     plot_phase_plane(
         f_x=f_x,
@@ -535,6 +547,7 @@ def plot_trajectories_from_inits(
         xlim=xlim,
         ylim=ylim,
         ax=axes[0],
+        decision_threshold=decision_threshold
     )
 
     xf, yf, ok = find_fixed_point_2d(
@@ -551,8 +564,8 @@ def plot_trajectories_from_inits(
         stim_on_x=stim_on_x,
         stim_on_y=stim_on_y,
     )
-    if ok:
-        axes[0].scatter([xf], [yf], color="black", s=60, marker="X", label="fixed point")
+    # if ok:
+    #     axes[0].scatter([xf], [yf], color="black", s=60, marker="X", label="fixed point")
         # axes[0].legend(fontsize=8)
 
     for i, (x0, y0) in enumerate(init_points):
@@ -584,13 +597,16 @@ def plot_trajectories_from_inits(
         axes[0].scatter([res["x_final"]], [res["y_final"]], s=30, color=color, marker="o")
 
         label = f"({x0:.2f},{y0:.2f}) -> pred={res['accept_pred']}"
-        axes[1].plot(res["t"], res["diff"], label=label, color=color)
+        # axes[1].plot(res["t"], res["diff"], label=label, color=color)
+        axes[1].plot(res["t"], res["diff"], color=color)
 
     axes[1].axhline(decision_threshold, linestyle="--", label="decision threshold")
+    axes[1].text(res["t"].max(), 0, "decision threshold", fontsize=10, va="top", ha="right")
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t) - y(t)")
     axes[1].set_title("Decision variable diff")
-    axes[1].legend(bbox_to_anchor=(1.05, 0), loc="lower left", fontsize=8)
+    # axes[1].legend(bbox_to_anchor=(1.00, 0), loc="lower left", fontsize=8, frameon=False)
+    # axes[1].legend(bbox_to_anchor=(1.00, 0), loc="lower left", fontsize=8, frameon=False)
 
     plt.tight_layout()
     plt.show()
@@ -649,6 +665,7 @@ def run_single_trial_demo_2d(
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
     mode = row["mode"]
+    decision_threshold = bias_decision_threshold(decision_threshold, k_init)
 
     drives = compute_accept_reject_drives(
         prior_accept_prob=p0,
@@ -749,8 +766,8 @@ def run_single_trial_demo_2d(
     init_points = generate_init_points_from_p0(
         p0,
         k_init=k_init,
-        noise_std=0.5,
-        n_points=5
+        noise_std=0.25,
+        n_points=10
     )
 
     plot_trajectories_from_inits(
@@ -772,8 +789,8 @@ def run_single_trial_demo_2d(
         dt=dt,
         T=T,
         decision_threshold=decision_threshold,
-        xlim=(-2,2),
-        ylim=(-2,2),
+        xlim=(-3,3),
+        ylim=(-3,3),
     )
 
     return {
@@ -830,6 +847,7 @@ def simulate_dataframe_2d(
     y_gate_scale=1.0,
 ):
     records = []
+    decision_threshold = bias_decision_threshold(decision_threshold, k_init)
 
     for idx, row in df.iterrows():
         p0 = float(row["subject_prior"])
