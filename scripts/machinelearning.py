@@ -123,15 +123,18 @@ def train_and_evaluate(
     # tree 其实不需要 scaler，但保留统一接口也可以
     # 如果你想更干净，也可以 tree 不加 scaler
     # -----------------------------
-    if model_type == "tree":
-        pipe = Pipeline([
-            ("clf", clf)
-        ])
-    else:
-        pipe = Pipeline([
-            ("scaler", StandardScaler()),
-            ("clf", clf)
-        ])
+    # if model_type == "tree":
+    #     pipe = Pipeline([
+    #         ("clf", clf)
+    #     ])
+    # else:
+    #     pipe = Pipeline([
+    #         ("scaler", StandardScaler()),
+    #         ("clf", clf)
+    #     ])
+    pipe = Pipeline([
+        ("clf", clf)
+    ])
 
     if repeated_cv:
         cv = RepeatedStratifiedKFold(
