@@ -43,7 +43,7 @@ def normalize_time_pressure(v):
     return int(bool(v))
 
 
-def stim_on_hill(stim_raw, K=0.1, n=2.0):
+def stim_on_hill(stim_raw, K=0.01, n=2.0):
     s = np.maximum(stim_raw, 0.0)
     return (s**n) / (K**n + s**n + 1e-12)
 
@@ -150,8 +150,8 @@ def compute_accept_reject_drives(
 # =========================================================
 # 3. Initial condition
 # =========================================================
-def bias_decision_threshold(decision_threshold=0.5, k_init=1.0, b_use_logits=False,)->float:
-    return safe_logit(k_init * decision_threshold) if b_use_logits else 2 * k_init * (decision_threshold - 0.5)
+def bias_decision_threshold(decision_threshold=0.5, k_init=1.0, p_bias=0.44, b_use_logits=False,)->float:
+    return safe_logit(k_init * decision_threshold) if b_use_logits else 2 * k_init * (decision_threshold - p_bias)
 
 def default_initial_condition(
     p0,
@@ -160,6 +160,7 @@ def default_initial_condition(
     rng=None,
     eps=1e-6,
     b_use_logits=False,
+    p_bias=0.44,
 ):
     if rng is None:
         rng = np.random.default_rng()
@@ -171,7 +172,7 @@ def default_initial_condition(
         x0 = k_init * safe_logit(p)
         y0 = k_init * safe_logit(1-p)
     else:
-        bias = p - 0.5
+        bias = p - p_bias
         x0 = k_init * bias
         y0 = -k_init * bias
    
@@ -202,9 +203,21 @@ def generate_init_points_from_p0(p0, k_init=1.0, noise_std=0.05, n_points=7, rng
 # =========================================================
 # 4. Unified nonlinear 2D dynamics
 # =========================================================
-
-def phi_tanh(z, gain=3.0):
-    return np.tanh(gain * z)
+def nonlinear_phi(z, model="nonlinear_sigmoid", gain=1.5,):
+    """
+    Centered nonlinear activation.
+    Returns a bounded term in roughly [-1, 1].
+    """
+    if model == "linear":
+        return 0.0
+    elif model == "nonlinear_tanh":
+        return np.tanh(gain * z)
+    elif model == "nonlinear_sigmoid":
+        return 2.0 * sigmoid(gain *z) - 1.0
+    else:
+        raise ValueError(
+            "model must be one of: 'linear', 'nonlinear_tanh', 'nonlinear_sigmoid'"
+        )
 
 
 def compute_stim_gates(
@@ -226,6 +239,8 @@ def compute_stim_gates(
         + alpha_intensity * float(intensity)
         + alpha_ci * float(coherence) * float(intensity)
     )
+    
+    stim_raw = float(intensity)
 
     if gate_func == "hill":
         s = stim_on_hill(stim_raw, **gate_kwargs)
@@ -238,6 +253,8 @@ def compute_stim_gates(
 
     stim_on_x = s
     stim_on_y = y_gate_scale * s if symmetric else 1.0
+    if symmetric is None:
+        stim_raw, stim_on_x, stim_on_y = 1,1,1
     return stim_raw, stim_on_x, stim_on_y
 
 
@@ -262,17 +279,18 @@ def decision_drift_2d(
     """
     Unified drift:
 
-        input_x = f_x + a_x * x - w_xy * y
-        input_y = f_y + a_y * y - w_yx * x
+        input_x = a_x * x - w_xy * y
+        input_y = a_y * y - w_yx * x
 
-        dx/dt = -lam_x * x + stim_on_x * tanh(gain_x * input_x)
-        dy/dt = -lam_y * y + stim_on_y * tanh(gain_y * input_y)
+        dx/dt = -lam_x * x + stim_on_x * tanh(gain_x * input_x) + f_x
+        dy/dt = -lam_y * y + stim_on_y * tanh(gain_y * input_y) + f_y
     """
+    
     input_x = a_x * x - w_xy * y
     input_y = a_y * y - w_yx * x
 
-    dxdt = -lam_x * x + a_stim_x * stim_on_x * phi_tanh(input_x, gain=gain_x) + f_x 
-    dydt = -lam_y * y + a_stim_y * stim_on_y * phi_tanh(input_y, gain=gain_y) + f_y
+    dxdt = -lam_x * x + a_stim_x * stim_on_x * nonlinear_phi(input_x, gain=gain_x) + f_x 
+    dydt = -lam_y * y + a_stim_y * stim_on_y * nonlinear_phi(input_y, gain=gain_y) + f_y
     return dxdt, dydt
 
 

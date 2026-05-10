@@ -113,6 +113,73 @@ def _get_window_slice(df_car, time_col, center_t, start_offset_ms, end_offset_ms
     # print(f"Getting window slice: center={center_t} ms, start_offset={t0} ms, end_offset={t1} ms")
     return df_car[(df_car[time_col] >= t0) & (df_car[time_col] <= t1)].copy()
 
+def get_smoothed_subject_prior(
+    df_subject_prior,
+    sub,
+    rec_subcategory,
+    rec_category=None,
+    default_prior_accept_prob=0.5,
+    prior_smoothing_alpha=0.3,
+):
+    """
+    Smooth subcategory-level prior toward category-level mean prior.
+
+    alpha = 0: use subcategory prior only
+    alpha = 1: use category mean prior only
+    """
+
+    if rec_category is None:
+        rec_category = int(str(rec_subcategory)[0])
+
+    if df_subject_prior is None:
+        return default_prior_accept_prob
+
+    row = df_subject_prior[df_subject_prior["sub_id"] == sub]
+
+    if len(row) == 0:
+        return SUBJECT_TYPE_PRIOR_DICT.get(
+            (sub, rec_category),
+            default_prior_accept_prob
+        )
+
+    row = row.iloc[0]
+
+    # subcategory prior
+    sub_col = str(rec_subcategory)
+    if sub_col in df_subject_prior.columns:
+        p_sub = row[sub_col]
+    elif rec_subcategory in df_subject_prior.columns:
+        p_sub = row[rec_subcategory]
+    else:
+        p_sub = SUBJECT_TYPE_PRIOR_DICT.get(
+            (sub, rec_category),
+            default_prior_accept_prob
+        )
+
+    # category mean prior
+    category_cols = [
+        col for col in df_subject_prior.columns
+        if str(col).isdigit() and int(str(col)[0]) == int(rec_category)
+    ]
+
+    if len(category_cols) > 0:
+        p_cat = row[category_cols].mean()
+    else:
+        p_cat = SUBJECT_TYPE_PRIOR_DICT.get(
+            (sub, rec_category),
+            default_prior_accept_prob
+        )
+
+    # fallback for NaN
+    if pd.isna(p_sub):
+        p_sub = p_cat
+    if pd.isna(p_cat):
+        p_cat = p_sub
+
+    return (
+        (1 - prior_smoothing_alpha) * p_sub
+        + prior_smoothing_alpha * p_cat
+    )
 
 def build_per_reaction_df(
     data_dict,
@@ -363,21 +430,14 @@ def build_per_reaction_df(
                     6: 1,
                 }
 
-                if df_subject_prior is not None:
-                    row = df_subject_prior[df_subject_prior["sub_id"] == sub]
-
-                    if len(row) == 0:
-                        subject_prior_accept_prob_subcategory = SUBJECT_TYPE_PRIOR_DICT.get(
-                            (sub, rec_category),
-                            default_prior_accept_prob
-                        )
-                    else:
-                        subject_prior_accept_prob_subcategory = row.iloc[0][f"{rec_subcategory}"]
-                else:
-                    subject_prior_accept_prob_subcategory = SUBJECT_TYPE_PRIOR_DICT.get(
-                        (sub, rec_category),
-                        default_prior_accept_prob
-                    )
+                subject_prior_accept_prob_subcategory = get_smoothed_subject_prior(
+                    df_subject_prior=df_subject_prior,
+                    sub=sub,
+                    rec_subcategory=rec_subcategory,
+                    rec_category=rec_category,
+                    default_prior_accept_prob=default_prior_accept_prob,
+                    prior_smoothing_alpha=0.75,
+                )
 
                 records.append({
                     # ---------------- meta ----------------

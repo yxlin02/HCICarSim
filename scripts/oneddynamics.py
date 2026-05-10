@@ -78,10 +78,10 @@ def compute_drive_u(
 # 3. Initial state from prior
 # =========================
 
-def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.02, eps=1e-6, b_use_logits=False):
+def compute_x0_from_prior(prior_accept_prob, kappa=1.0, noise_std=0.02, eps=1e-6, b_use_logits=False, p_bias=0.5):
     p = prior_accept_prob + np.random.normal(0, noise_std)
     p = np.clip(p, eps, 1 - eps)
-    return kappa * safe_logit(p) if b_use_logits else kappa * (p - 0.5)
+    return kappa * safe_logit(p) if b_use_logits else kappa * (p - p_bias)
 
 
 # =========================
@@ -684,6 +684,8 @@ def run_single_trial_demo(
     time_gain_multiplier=1.5,
     auto_lam_multiplier=1.2,
     auto_sigma_multiplier=0.7,
+    p_bias=0.5,
+    b_use_stim_on=False,
 ):
     p0 = float(row["subject_prior"])
     coherence = float(row["recommendation_coherence"])
@@ -692,13 +694,17 @@ def run_single_trial_demo(
     car_density = float(row["car_density"])
     time_pressure = row["time_pressure"]
     mode = row["mode"]
+    # stim_on = stim_on_hill(
+    #     beta_c * coherence
+    #     + beta_i * intensity
+    #     + beta_ci * coherence * intensity
+    # )
     stim_on = stim_on_hill(
-        beta_c * coherence
-        + beta_i * intensity
-        + beta_ci * coherence * intensity
-    )
-    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
-    x0 = compute_x0_from_prior(p0, kappa=kappa)
+        intensity
+    ) if b_use_stim_on else 1
+
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa, p_bias=p_bias)
+    x0 = compute_x0_from_prior(p0, kappa=kappa, p_bias=p_bias)
 
     u = compute_drive_u(
         coherence=coherence,
@@ -763,7 +769,7 @@ def run_single_trial_demo(
                 f"{item['stability']}, slope={item['slope']:.3f}"
             )
 
-    x0_list = [compute_x0_from_prior(x0, noise_std=0.5) for _ in range(10)]
+    x0_list = [compute_x0_from_prior(x0, noise_std=0.5, p_bias=p_bias,) for _ in range(10)]
     plot_trajectories_different_x0(
         x0_list=x0_list,
         u=u,
@@ -818,9 +824,11 @@ def simulate_dataframe_decisions(
     time_gain_multiplier=1.5,
     auto_lam_multiplier=1.2,
     auto_sigma_multiplier=0.7,
+    p_bias=0.5,
+    b_use_stim_on=False,
 ):
     records = []
-    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa, p_bias=p_bias)
 
     for idx, row in df.iterrows():
         p0 = float(row["subject_prior"])
@@ -830,14 +838,18 @@ def simulate_dataframe_decisions(
         car_density = float(row["car_density"])
         time_pressure = row["time_pressure"]
         mode = row["mode"]
+        # stim_on = stim_on_hill(
+        #     beta_c * coherence
+        #     + beta_i * intensity
+        #     + beta_ci * coherence * intensity
+        # ) 
+
         stim_on = stim_on_hill(
-            beta_c * coherence
-            + beta_i * intensity
-            + beta_ci * coherence * intensity
-        )
+            intensity
+        ) if b_use_stim_on else 1
 
         
-        x0 = compute_x0_from_prior(p0, kappa=kappa)
+        x0 = compute_x0_from_prior(p0, kappa=kappa, p_bias=p_bias)
 
         u = compute_drive_u(
             coherence=coherence,
@@ -933,6 +945,7 @@ def inspect_single_trial_phase_portrait(
     auto_sigma_multiplier=0.7,
     x_min=-5.0,
     x_max=5.0,
+    p_bias=0.5,
 ):
     p0 = float(row["subject_prior"])
     coherence = float(row["recommendation_coherence"])
@@ -946,9 +959,9 @@ def inspect_single_trial_phase_portrait(
         + beta_i * intensity
         + beta_ci * coherence * intensity
     )
-    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa, p_bias=p_bias)
 
-    x0 = compute_x0_from_prior(p0, kappa=kappa)
+    x0 = compute_x0_from_prior(p0, kappa=kappa, p_bias=p_bias)
 
     u = compute_drive_u(
         coherence=coherence,
@@ -1081,9 +1094,11 @@ def build_dynamical_correction_features(
     dt=0.01,
     T=5.0,
     theta_readout=0.0,
+    p_bias=0.5,
+    b_use_stime_on=False,
 ):
     records = []
-    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa)
+    theta_readout = compute_x0_from_prior(theta_readout, noise_std=0, kappa=kappa, p_bias=p_bias)
 
     for idx, row in df.iterrows():
         p0 = float(row["subject_prior"])
@@ -1097,9 +1112,9 @@ def build_dynamical_correction_features(
             beta_c * coherence
             + beta_i * intensity
             + beta_ci * coherence * intensity
-        )
+        ) if b_use_stime_on else 1
 
-        x0 = compute_x0_from_prior(p0, kappa=kappa, noise_std=0.0)
+        x0 = compute_x0_from_prior(p0, kappa=kappa, noise_std=0.0, p_bias=p_bias)
 
         u = compute_drive_u(
             coherence=coherence,
@@ -1174,7 +1189,7 @@ def build_dynamical_correction_features(
 # ==============================
 # stim_on gating function
 # ==============================
-def stim_on_hill(stim_raw, K=0.1, n=2.0):
+def stim_on_hill(stim_raw, K=0.01, n=2.0):
     s = np.maximum(stim_raw, 0.0)
     return (s**n) / (K**n + s**n + 1e-12)
 

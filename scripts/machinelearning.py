@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import (
     StratifiedKFold,
     RepeatedStratifiedKFold,
+    GroupKFold,
     cross_validate,
     cross_val_predict
 )
@@ -24,8 +25,62 @@ from sklearn.metrics import (
     roc_auc_score,
     brier_score_loss,
     roc_curve, 
-    auc
+    auc,
+    classification_report
 )
+
+def make_leave_subject_splits(df, group_col="sub_id", leave_subjects=None):
+    """
+    Custom subject-level CV splitter.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full dataframe.
+    group_col : str
+        Subject/group column name.
+    leave_subjects : None, list, or list of lists
+        - None:
+            standard LOSO, leave one subject out each fold.
+        - ["sub01", "sub03"]&#58;             only evaluate selected subjects, one subject per fold.
+        - [["sub01", "sub02"], ["sub05", "sub08"]]:
+            custom grouped holdout folds.
+
+    Returns
+    -------
+    splits : list of (train_idx, test_idx)
+    """
+
+    all_subjects = pd.Series(df[group_col].unique())
+
+    if leave_subjects is None:
+        # Standard LOSO: each subject is one test fold
+        leave_subjects = [[s] for s in all_subjects]
+
+    else:
+        # If user passes a flat list, convert to one-subject-per-fold
+        # Example: ["S01", "S02"] -> [["S01"], ["S02"]]
+        if len(leave_subjects) > 0 and not isinstance(leave_subjects[0], (list, tuple, set)):
+            leave_subjects = [[s] for s in leave_subjects]
+
+    splits = []
+
+    for fold_subjects in leave_subjects:
+        fold_subjects = list(fold_subjects)
+
+        test_mask = df[group_col].isin(fold_subjects).values
+        train_mask = ~test_mask
+
+        train_idx = np.where(train_mask)[0]
+        test_idx = np.where(test_mask)[0]
+
+        if len(test_idx) == 0:
+            print(f"Warning: no rows found for held-out subjects: {fold_subjects}")
+            continue
+
+        splits.append((train_idx, test_idx))
+
+    return splits
 
 
 def train_and_evaluate(
@@ -38,10 +93,17 @@ def train_and_evaluate(
     repeated_cv=False,
     return_fold_models=False,
     fit_final_model=True,
+
+    # new arguments
+    cv_type="stratified",       # "stratified", "groupkfold", "loso", "custom_loso"
+    group_col="sub_id",
+    leave_subjects=None,
+
     **kwargs
 ):
     X = df_reaction_all[features].copy()
     y = df_reaction_all[target].astype(int)
+    groups = df_reaction_all[group_col]
 
     if "time_pressure" in X.columns:
         X["time_pressure"] = X["time_pressure"].astype(int)
@@ -90,6 +152,7 @@ def train_and_evaluate(
             ccp_alpha=kwargs.get("ccp_alpha", 0.0),
             random_state=kwargs.get("random_state", 42),
         )
+
     elif model_type == "forest":
         clf = RandomForestClassifier(
             n_estimators=kwargs.get("n_estimators", 500),
@@ -105,6 +168,7 @@ def train_and_evaluate(
             random_state=kwargs.get("random_state", 42),
             ccp_alpha=kwargs.get("ccp_alpha", 0.0),
         )
+
     elif model_type == "gbdt":
         clf = HistGradientBoostingClassifier(
             max_iter=kwargs.get("max_iter", 500),
@@ -115,38 +179,55 @@ def train_and_evaluate(
             class_weight=kwargs.get("class_weight", "balanced"),
             random_state=kwargs.get("random_state", 42),
         )
-    else:
-        raise ValueError("model_type must be one of: 'logistic', 'svm', 'mlp', 'tree'")
 
-    # -----------------------------
-    # pipeline
-    # tree 其实不需要 scaler，但保留统一接口也可以
-    # 如果你想更干净，也可以 tree 不加 scaler
-    # -----------------------------
-    # if model_type == "tree":
-    #     pipe = Pipeline([
-    #         ("clf", clf)
-    #     ])
-    # else:
-    #     pipe = Pipeline([
-    #         ("scaler", StandardScaler()),
-    #         ("clf", clf)
-    #     ])
+    else:
+        raise ValueError(
+            "model_type must be one of: "
+            "'logistic', 'svm', 'mlp', 'tree', 'forest', 'gbdt'"
+        )
+
     pipe = Pipeline([
         ("clf", clf)
     ])
 
-    if repeated_cv:
-        cv = RepeatedStratifiedKFold(
-            n_splits=n_splits,
-            n_repeats=n_repeats,
-            random_state=kwargs.get("random_state", 42)
+    # -----------------------------
+    # choose CV scheme
+    # -----------------------------
+    if cv_type == "stratified":
+        if repeated_cv:
+            cv = RepeatedStratifiedKFold(
+                n_splits=n_splits,
+                n_repeats=n_repeats,
+                random_state=kwargs.get("random_state", 42)
+            )
+            cv_splits = cv
+            cv_groups = None
+        else:
+            cv = StratifiedKFold(
+                n_splits=n_splits,
+                shuffle=True,
+                random_state=kwargs.get("random_state", 42)
+            )
+            cv_splits = cv
+            cv_groups = None
+
+    elif cv_type == "groupkfold":
+        cv = GroupKFold(n_splits=n_splits)
+        cv_splits = cv
+        cv_groups = groups
+
+    elif cv_type in ["loso", "custom_loso"]:
+        cv_splits = make_leave_subject_splits(
+            df_reaction_all,
+            group_col=group_col,
+            leave_subjects=leave_subjects
         )
+        cv_groups = None
+
     else:
-        cv = StratifiedKFold(
-            n_splits=n_splits,
-            shuffle=True,
-            random_state=kwargs.get("random_state", 42)
+        raise ValueError(
+            "cv_type must be one of: "
+            "'stratified', 'groupkfold', 'loso', 'custom_loso'"
         )
 
     scoring = {
@@ -161,35 +242,72 @@ def train_and_evaluate(
     # -----------------------------
     # cross-validated metrics
     # -----------------------------
-    cv_results = cross_validate(
-        pipe,
-        X,
-        y,
-        cv=cv,
-        scoring=scoring,
-        return_train_score=False
-    )
+    if cv_type in ["groupkfold"]:
+        cv_results = cross_validate(
+            pipe,
+            X,
+            y,
+            cv=cv_splits,
+            groups=cv_groups,
+            scoring=scoring,
+            return_train_score=False,
+            error_score=np.nan
+        )
+    else:
+        cv_results = cross_validate(
+            pipe,
+            X,
+            y,
+            cv=cv_splits,
+            scoring=scoring,
+            return_train_score=False,
+            error_score=np.nan
+        )
 
     print("Accuracy per fold:", cv_results["test_accuracy"])
     print("AUC per fold:", cv_results["test_roc_auc"])
 
     print("Mean Accuracy: %.4f ± %.4f" % (
-        np.mean(cv_results["test_accuracy"]),
-        np.std(cv_results["test_accuracy"])
+        np.nanmean(cv_results["test_accuracy"]),
+        np.nanstd(cv_results["test_accuracy"])
     ))
     print("Mean AUC: %.4f ± %.4f" % (
-        np.mean(cv_results["test_roc_auc"]),
-        np.std(cv_results["test_roc_auc"])
+        np.nanmean(cv_results["test_roc_auc"]),
+        np.nanstd(cv_results["test_roc_auc"])
     ))
 
     # -----------------------------
     # out-of-fold predictions
     # -----------------------------
-    if repeated_cv:
-        y_pred, y_prob = repeated_cv_predict(pipe, X, y, cv)
+    if cv_type == "stratified" and repeated_cv:
+        y_pred, y_prob = repeated_cv_predict(pipe, X, y, cv_splits)
+
     else:
-        y_pred = cross_val_predict(pipe, X, y, cv=cv, method="predict")
-        y_prob = cross_val_predict(pipe, X, y, cv=cv, method="predict_proba")[:, 1]
+        if cv_type == "groupkfold":
+            y_pred = cross_val_predict(
+                pipe, X, y,
+                cv=cv_splits,
+                groups=cv_groups,
+                method="predict"
+            )
+            y_prob = cross_val_predict(
+                pipe, X, y,
+                cv=cv_splits,
+                groups=cv_groups,
+                method="predict_proba"
+            )[:, 1]
+
+        else:
+            y_pred = cross_val_predict(
+                pipe, X, y,
+                cv=cv_splits,
+                method="predict"
+            )
+            y_prob = cross_val_predict(
+                pipe, X, y,
+                cv=cv_splits,
+                method="predict_proba"
+            )[:, 1]
 
     print("\nOverall CV Accuracy:", accuracy_score(y, y_pred))
     print("Overall CV AUC:", roc_auc_score(y, y_prob))
@@ -201,7 +319,15 @@ def train_and_evaluate(
     # -----------------------------
     df_coef = None
     if model_type == "logistic":
-        df_coef, coefs = get_cv_feature_importance(pipe, X, y, cv)
+        if cv_type == "groupkfold":
+            df_coef, coefs = get_cv_feature_importance(
+                pipe, X, y, cv_splits, groups=cv_groups
+            )
+        else:
+            df_coef, coefs = get_cv_feature_importance(
+                pipe, X, y, cv_splits
+            )
+
         print("\nFeature importance (mean ± std):")
         print(df_coef)
 
@@ -209,16 +335,49 @@ def train_and_evaluate(
     # return fitted fold models if needed
     # -----------------------------
     fold_models = None
+    fold_info = []
+
     if return_fold_models:
         fold_models = []
-        for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X, y)):
+
+        if cv_type == "groupkfold":
+            split_iter = cv_splits.split(X, y, groups=cv_groups)
+        else:
+            split_iter = cv_splits.split(X, y) if hasattr(cv_splits, "split") else cv_splits
+
+        for fold_idx, (train_idx, test_idx) in enumerate(split_iter):
             model_fold = clone(pipe)
             model_fold.fit(X.iloc[train_idx], y.iloc[train_idx])
             fold_models.append(model_fold)
 
+            fold_subjects = df_reaction_all.iloc[test_idx][group_col].unique().tolist()
+            fold_info.append({
+                "fold": fold_idx,
+                "test_subjects": fold_subjects,
+                "n_train": len(train_idx),
+                "n_test": len(test_idx),
+            })
+
+    else:
+        # still store fold info even if models are not returned
+        if cv_type == "groupkfold":
+            split_iter = cv_splits.split(X, y, groups=cv_groups)
+        else:
+            split_iter = cv_splits.split(X, y) if hasattr(cv_splits, "split") else cv_splits
+
+        for fold_idx, (train_idx, test_idx) in enumerate(split_iter):
+            fold_subjects = df_reaction_all.iloc[test_idx][group_col].unique().tolist()
+            fold_info.append({
+                "fold": fold_idx,
+                "test_subjects": fold_subjects,
+                "n_train": len(train_idx),
+                "n_test": len(test_idx),
+            })
+
+    fold_info = pd.DataFrame(fold_info)
+
     # -----------------------------
     # fit final model on full data
-    # for visualization / deployment / inspection
     # -----------------------------
     final_model = None
     if fit_final_model:
@@ -231,9 +390,13 @@ def train_and_evaluate(
         "y_pred": y_pred,
         "y_prob": y_prob,
         "feature_importance": df_coef,
-        "final_model": final_model,      # 全数据拟合后的模型
-        "fold_models": fold_models,      # 每折模型（可选）
+        "final_model": final_model,
+        "fold_models": fold_models,
+        "fold_info": fold_info,
         "features": features,
+        "cv_type": cv_type,
+        "group_col": group_col,
+        "leave_subjects": leave_subjects,
     }
 
 from sklearn.base import clone
@@ -269,35 +432,41 @@ def repeated_cv_predict(pipe, X, y, cv, threshold=0.5):
 
     return y_pred_avg, y_prob_avg
 
-def get_cv_feature_importance(pipe, X, y, cv):
+def get_cv_feature_importance(pipe, X, y, cv, groups=None):
+    from sklearn.base import clone
+    import numpy as np
+    import pandas as pd
+
     coefs = []
 
-    for train_idx, test_idx in cv.split(X, y):
-        X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
+    if hasattr(cv, "split"):
+        if groups is not None:
+            split_iter = cv.split(X, y, groups=groups)
+        else:
+            split_iter = cv.split(X, y)
+    else:
+        split_iter = cv
 
+    for train_idx, test_idx in split_iter:
         model = clone(pipe)
-        model.fit(X_train, y_train)
+        model.fit(X.iloc[train_idx], y.iloc[train_idx])
 
-        # 取出 logistic
         clf = model.named_steps["clf"]
 
         if hasattr(clf, "coef_"):
             coefs.append(clf.coef_[0])
 
-    coefs = np.array(coefs)  # shape: [n_splits, n_features]
-
-    selection_freq = (coefs != 0).mean(axis=0)
-
-    coef_mean = coefs.mean(axis=0)
-    coef_std = coefs.std(axis=0)
+    coefs = np.asarray(coefs)
 
     df_coef = pd.DataFrame({
         "feature": X.columns,
-        "coef_mean": coef_mean,
-        "coef_std": coef_std,
-        "abs_mean": np.abs(coef_mean),
-        "selection_freq": selection_freq
-    }).sort_values("abs_mean", ascending=False)
+        "coef_mean": coefs.mean(axis=0),
+        "coef_std": coefs.std(axis=0),
+        "abs_mean": np.abs(coefs).mean(axis=0),
+        "selection_freq": (coefs != 0).mean(axis=0),
+    })
+
+    df_coef = df_coef.sort_values("abs_mean", ascending=False).reset_index(drop=True)
 
     return df_coef, coefs
 
