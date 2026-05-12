@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scripts import global_property
 
 
 def plot_metric_by_group_across_subcategories(
@@ -134,7 +135,7 @@ def plot_metric_by_group_across_subcategories(
                 ax=ax
             )
 
-        sub_group_median = sub_df.groupby(group)[metric].median()
+        sub_group_median = sub_df.groupby(group)[metric].mean()
 
         # 获取 x 轴 label -> tick 的映射
         xticks = {label.get_text(): tick for tick, label in enumerate(ax.get_xticklabels())}
@@ -160,11 +161,13 @@ def plot_metric_by_group_across_subcategories(
                 )
                 ax.scatter([x0, x1], [y0, y1], color="gray", s=10, zorder=3)
 
-        ax.set_title(f"{subcat}")
+        ax.set_title(f"{subcat}: {global_property.SUBCATEGORY_MAP[str(subcat)]}")
+        ax.set_ylim(0,7.5)
+        ax.set_yticks(np.arange(1,7.1,2))
         ax.set_xlabel("")
         ax.set_ylabel("")
         # ax.set_ylabel(metric if (not sharey or i % ncols == 0) else "")
-        ax.tick_params(axis="x", rotation=rotate_xticks, labelsize=8)
+        ax.tick_params(axis="x", rotation=rotate_xticks)
 
         if ax.get_legend() is not None:
             handles, labels = ax.get_legend_handles_labels()
@@ -172,15 +175,15 @@ def plot_metric_by_group_across_subcategories(
                 legend_handles, legend_labels = handles, labels
             ax.get_legend().remove()
 
-    # 删除多余空子图
     for j in range(n_subcats, len(axes)):
         fig.delaxes(axes[j])
 
-    if title is None:
-        title = f"{metric} by {group} across {subcategory_col}"
+    # if title is None:
+    #     title = f"{metric} by {group} across {subcategory_col}"
 
-    fig.suptitle(title, fontsize=14)
-    fig.tight_layout(rect=[0, 0, 1, 0.98])
+    # fig.suptitle(title, fontsize=14)
+    fig.tight_layout()
+    # fig.tight_layout(rect=[0, 0, 1, 0.98])
 
     if legend_handles is not None:
         fig.legend(
