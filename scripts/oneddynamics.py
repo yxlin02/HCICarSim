@@ -502,8 +502,11 @@ def plot_phase_line_and_nullcline(
 
     ax.set_xlabel("x")
     ax.set_ylabel("dx/dt")
+    ax.set_xlim(-3,3)
+    ax.set_ylim(-2,2)
+    ax.set_yticks(np.arange(-2,2.1,1.0))
     ax.set_title(f"1D Phase Line")
-    ax.legend(bbox_to_anchor=(0, 0), loc="lower left", fontsize=8)
+    ax.legend(bbox_to_anchor=(0, 0), loc="lower left")
 
     return ax, fixed_points
 
@@ -541,7 +544,7 @@ def plot_trajectories_different_x0(
         linestyle="-",
         color="green",
         linewidth=2.0,
-        label=f"theta_dyn={theta_readout:.2f}",
+        label=f"theta_readout",
     )
 
     plot_phase_line_and_nullcline(
@@ -650,6 +653,7 @@ def plot_trajectories_different_x0(
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t)")
     axes[1].set_title(f"Trajectories")
+    axes[1].set_ylim(-3,3)
     # axes[1].legend(bbox_to_anchor=(0, 0), loc="lower left", fontsize=8)
 
     plt.tight_layout()
@@ -769,7 +773,7 @@ def run_single_trial_demo(
                 f"{item['stability']}, slope={item['slope']:.3f}"
             )
 
-    x0_list = [compute_x0_from_prior(x0, noise_std=0.5, p_bias=p_bias,) for _ in range(10)]
+    x0_list = [compute_x0_from_prior(x0, noise_std=0.5, p_bias=p_bias,) for _ in range(20)]
     plot_trajectories_different_x0(
         x0_list=x0_list,
         u=u,

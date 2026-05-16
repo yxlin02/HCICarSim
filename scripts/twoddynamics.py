@@ -188,15 +188,26 @@ def perturb_p0(p0, noise_std=0.1, rng=None):
     return p0_new
 
 
-def generate_init_points_from_p0(p0, k_init=1.0, noise_std=0.05, n_points=7, rng=None):
-    if rng is None:
-        rng = np.random.default_rng()
+def generate_init_points_from_p0(
+    p0,
+    k_init=1.0,
+    noise_std=0.05,
+    n_points=7,
+    seed=30,
+):
+    rng = np.random.default_rng(seed)
 
     init_points = []
+
     for _ in range(n_points):
         p0_i = perturb_p0(p0, noise_std=noise_std, rng=rng)
-        x0_i, y0_i = default_initial_condition(p0_i, k_init=k_init, rng=rng)
+        x0_i, y0_i = default_initial_condition(
+            p0_i,
+            k_init=k_init,
+            rng=rng,
+        )
         init_points.append((x0_i, y0_i))
+
     return init_points
 
 
@@ -469,7 +480,7 @@ def plot_phase_plane(
     ax.set_xlabel("accept state x")
     ax.set_ylabel("reject state y")
     ax.set_title("Decision phase plane")
-    ax.legend(handles=legend_handles, bbox_to_anchor=(0.0, 0), loc="lower left", fontsize=8, frameon=True)
+    ax.legend(handles=legend_handles, bbox_to_anchor=(0.0, 0), loc="lower left", frameon=True)
     # ax.legend(handles=legend_handles, bbox_to_anchor=(1.00, 0), loc="lower left", fontsize=8, frameon=False)
     ax.set_aspect("equal", "box")
     return ax
@@ -622,6 +633,7 @@ def plot_trajectories_from_inits(
     axes[1].text(res["t"].max(), 0, "decision threshold", fontsize=10, va="top", ha="right")
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t) - y(t)")
+    axes[1].set_ylim(-3,3)
     axes[1].set_title("Decision variable diff")
     # axes[1].legend(bbox_to_anchor=(1.00, 0), loc="lower left", fontsize=8, frameon=False)
     # axes[1].legend(bbox_to_anchor=(1.00, 0), loc="lower left", fontsize=8, frameon=False)
@@ -784,8 +796,9 @@ def run_single_trial_demo_2d(
     init_points = generate_init_points_from_p0(
         p0,
         k_init=k_init,
-        noise_std=0.25,
-        n_points=10
+        noise_std=0.1,
+        n_points=20,
+        seed=100,
     )
 
     plot_trajectories_from_inits(

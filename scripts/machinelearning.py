@@ -568,10 +568,13 @@ def fit_surrogate_tree_from_forest(
 def plot_logistic_loadings(res_logistic, top_n=None, figsize=(6,4)):
     df_coef = res_logistic["feature_importance"].copy()
 
+    df_coef["feature"] = df_coef["feature"].replace({
+        "mode": "driving_mode"
+    })
+
     if top_n is not None:
         df_coef = df_coef.head(top_n)
 
-    # 为了图上从小到大排列
     df_coef = df_coef.sort_values("coef_mean", ascending=True)
 
     plt.figure(figsize=(figsize[0], max(figsize[1], 0.35 * len(df_coef))))
@@ -632,6 +635,7 @@ def make_performance_long_df(model_results, metrics=None):
 def plot_model_performance(
     df_perf_long,
     metrics_to_plot=("AUC", "Balanced Accuracy"),
+    baselines=(0.5, 0.69),
     model_order=None,
     plot_style="box",
     b_show_scatter=False,
@@ -643,6 +647,7 @@ def plot_model_performance(
         model_order = list(df_plot["model"].unique())
 
     metrics = list(metrics_to_plot)
+    baselines = list(baselines)
 
     fig, axes = plt.subplots(
         1,
@@ -654,7 +659,8 @@ def plot_model_performance(
     if len(metrics) == 1:
         axes = [axes]
 
-    for ax, metric in zip(axes, metrics):
+    for i, packs in enumerate(zip(axes, metrics)):
+        ax, metric = packs[0], packs[1]
         d = df_plot[df_plot["metric"] == metric]
 
         data = [
@@ -692,11 +698,13 @@ def plot_model_performance(
                     alpha=0.45,
                     s=22,
                 )
+        
+        ax.text(1, baselines[i] + 0.01,"chance level", ha="left")
 
-        ax.axhline(0.5, linestyle="--", linewidth=1)
+        ax.axhline(baselines[i], linestyle="--", linewidth=1)
         ax.set_title(metric)
         ax.set_ylabel("Score")
-        ax.set_ylim(0.45, 1.0)
+        ax.set_ylim(0.4, 1.0)
         ax.set_xticklabels(model_order, ha="right", )
         ax.tick_params(axis="x", rotation=35)
 
