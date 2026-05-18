@@ -502,9 +502,9 @@ def plot_phase_line_and_nullcline(
 
     ax.set_xlabel("x")
     ax.set_ylabel("dx/dt")
-    ax.set_xlim(-3,3)
-    ax.set_ylim(-2,2)
-    ax.set_yticks(np.arange(-2,2.1,1.0))
+    ax.set_xlim(-4,4)
+    ax.set_ylim(-4,2)
+    # ax.set_yticks(np.arange(-2,2.1,1.0))
     ax.set_title(f"1D Phase Line")
     ax.legend(bbox_to_anchor=(0, 0), loc="lower left")
 
@@ -653,7 +653,7 @@ def plot_trajectories_different_x0(
     axes[1].set_xlabel("time")
     axes[1].set_ylabel("x(t)")
     axes[1].set_title(f"Trajectories")
-    axes[1].set_ylim(-3,3)
+    axes[1].set_ylim(-4,4)
     # axes[1].legend(bbox_to_anchor=(0, 0), loc="lower left", fontsize=8)
 
     plt.tight_layout()

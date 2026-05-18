@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import differential_evolution, minimize
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score
 
 from scripts import twoddynamics, oneddynamics, databuilder, readsubcategoryrating, intensity_calculation, demographics, plotter, optim, machinelearning, overall_ratings, dynamics_evaluation
 
@@ -70,23 +70,76 @@ def repeated_group_kfold_indices(
     group_col="sub_id",
     n_splits=5,
     n_repeats=5,
-    random_state=42
+    random_state=42,
+    mode="groupkfold",   # "groupkfold" or "loso"
 ):
     """
-    Repeated GroupKFold-like split.
+    Repeated subject-level cross-validation.
 
-    Each repeat randomly shuffles unique subjects, then splits subjects into
-    n_splits folds. This ensures that the same subject never appears in both
-    training and test sets within one fold.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe.
+
+    group_col : str
+        Column indicating subject / group identity.
+
+    n_splits : int
+        Number of group folds when mode="groupkfold".
+        Ignored when mode="loso".
+
+    n_repeats : int
+        Number of repeated shuffles.
+
+    random_state : int
+        Random seed.
+
+    mode : str
+        "groupkfold":
+            Repeated GroupKFold-like split.
+            Each repeat randomly shuffles subjects and splits them into n_splits folds.
+
+        "loso":
+            Leave-One-Subject-Out split.
+            Each fold uses one subject as test set.
+            Subject order is shuffled for each repeat.
+
+    Yields
+    ------
+    repeat : int
+    fold : int
+    train_idx : np.ndarray
+    test_idx : np.ndarray
+    test_groups : np.ndarray
+        Subjects used as test groups in this fold.
     """
+
     rng = np.random.default_rng(random_state)
     unique_groups = np.array(df[group_col].dropna().unique())
+
+    if len(unique_groups) == 0:
+        raise ValueError(f"No valid groups found in column {group_col!r}.")
+
+    if mode not in ["groupkfold", "loso"]:
+        raise ValueError("mode must be either 'groupkfold' or 'loso'.")
 
     for repeat in range(1, n_repeats + 1):
         shuffled_groups = unique_groups.copy()
         rng.shuffle(shuffled_groups)
 
-        group_folds = np.array_split(shuffled_groups, n_splits)
+        if mode == "groupkfold":
+            if n_splits > len(unique_groups):
+                raise ValueError(
+                    f"n_splits={n_splits} cannot be larger than "
+                    f"number of groups={len(unique_groups)}."
+                )
+
+            group_folds = np.array_split(shuffled_groups, n_splits)
+
+        elif mode == "loso":
+            group_folds = [
+                np.array([g]) for g in shuffled_groups
+            ]
 
         for fold, test_groups in enumerate(group_folds, start=1):
             test_mask = df[group_col].isin(test_groups).values
@@ -132,6 +185,7 @@ def evaluate_dynamic_params(
             "score": -np.inf,
             "acc": np.nan,
             "auc": np.nan,
+            "balanced_accuracy": np.nan,
             "logloss": np.nan,
             "accept_rate": np.nan,
             "pred_accept_rate": np.nan,
@@ -149,6 +203,7 @@ def evaluate_dynamic_params(
     )
 
     acc = accuracy_score(y_true, y_pred)
+    balanced_accuracy = balanced_accuracy_score(y_true, y_pred)
 
     if len(np.unique(y_true)) < 2:
         auc = np.nan
@@ -174,6 +229,7 @@ def evaluate_dynamic_params(
     return {
         "score": score,
         "acc": acc,
+        "balanced_accuracy": balanced_accuracy,
         "auc": auc,
         "logloss": ll,
         "accept_rate": accept_rate,
@@ -295,6 +351,7 @@ def random_search_dynamic_params(
             "iter": i,
             "score": res["score"],
             "acc": res["acc"],
+            "balanced_accuracy": res["balanced_accuracy"],
             "auc": res["auc"],
             "logloss": res["logloss"],
             "accept_rate": res["accept_rate"],
@@ -336,3 +393,24 @@ def random_search_dynamic_params(
         "stop_iter": stop_iter,
         "best_score": best_score,
     }
+
+def compute_binary_metrics(y_true, y_prob, y_pred=None):
+    y_true = np.asarray(y_true).astype(int)
+    y_prob = np.clip(np.asarray(y_prob).astype(float), 1e-6, 1 - 1e-6)
+
+    if y_pred is None:
+        y_pred = (y_prob >= 0.5).astype(int)
+    else:
+        y_pred = np.asarray(y_pred).astype(int)
+
+    acc = accuracy_score(y_true, y_pred)
+    bal_acc = balanced_accuracy_score(y_true, y_pred)
+
+    if len(np.unique(y_true)) < 2:
+        auc = np.nan
+    else:
+        auc = roc_auc_score(y_true, y_prob)
+
+    nll = log_loss(y_true, y_prob)
+
+    return acc, bal_acc, auc, nll, y_true.mean(), y_pred.mean()

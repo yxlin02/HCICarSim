@@ -704,7 +704,7 @@ def plot_model_performance(
         ax.axhline(baselines[i], linestyle="--", linewidth=1)
         ax.set_title(metric)
         ax.set_ylabel("Score")
-        ax.set_ylim(0.4, 1.0)
+        ax.set_ylim(0.0, 1.0)
         ax.set_xticklabels(model_order, ha="right", )
         ax.tick_params(axis="x", rotation=35)
 
