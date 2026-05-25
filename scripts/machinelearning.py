@@ -28,6 +28,7 @@ from sklearn.metrics import (
     auc,
     classification_report
 )
+from scripts import optim
 
 def make_leave_subject_splits(df, group_col="sub_id", leave_subjects=None):
     """
@@ -217,11 +218,30 @@ def train_and_evaluate(
         cv_groups = groups
 
     elif cv_type in ["loso", "custom_loso"]:
-        cv_splits = make_leave_subject_splits(
-            df_reaction_all,
-            group_col=group_col,
-            leave_subjects=leave_subjects
+        split_records = list(
+            optim.repeated_group_kfold_indices(
+                df_reaction_all,
+                group_col=group_col,
+                n_splits=n_splits,
+                n_repeats=n_repeats if repeated_cv else 1,
+                random_state=kwargs.get("random_state", 42),
+                mode="loso",
+            )
         )
+
+        if leave_subjects is not None:
+            leave_subjects_set = set(leave_subjects)
+            split_records = [
+                item for item in split_records
+                if set(item[4]).issubset(leave_subjects_set)
+            ]
+
+        # sklearn cross_validate / cross_val_predict 只需要 (train_idx, test_idx)
+        cv_splits = [
+            (train_idx, test_idx)
+            for repeat, fold, train_idx, test_idx, test_groups in split_records
+        ]
+
         cv_groups = None
 
     else:
@@ -341,40 +361,49 @@ def train_and_evaluate(
         fold_models = []
 
         if cv_type == "groupkfold":
-            split_iter = cv_splits.split(X, y, groups=cv_groups)
+            split_iter = list(cv_splits.split(X, y, groups=cv_groups))
+            split_meta = [(1, i + 1, tr, te, df_reaction_all.iloc[te][group_col].unique())
+                        for i, (tr, te) in enumerate(split_iter)]
+        elif cv_type in ["loso", "custom_loso"]:
+            split_meta = split_records
         else:
             split_iter = cv_splits.split(X, y) if hasattr(cv_splits, "split") else cv_splits
+            split_meta = [(1, i + 1, tr, te, df_reaction_all.iloc[te][group_col].unique())
+                        for i, (tr, te) in enumerate(split_iter)]
 
-        for fold_idx, (train_idx, test_idx) in enumerate(split_iter):
+        for repeat, fold, train_idx, test_idx, test_groups in split_meta:
             model_fold = clone(pipe)
             model_fold.fit(X.iloc[train_idx], y.iloc[train_idx])
             fold_models.append(model_fold)
 
-            fold_subjects = df_reaction_all.iloc[test_idx][group_col].unique().tolist()
             fold_info.append({
-                "fold": fold_idx,
-                "test_subjects": fold_subjects,
+                "repeat": repeat,
+                "fold": fold,
+                "test_subjects": list(test_groups),
                 "n_train": len(train_idx),
                 "n_test": len(test_idx),
             })
 
     else:
-        # still store fold info even if models are not returned
         if cv_type == "groupkfold":
-            split_iter = cv_splits.split(X, y, groups=cv_groups)
+            split_iter = list(cv_splits.split(X, y, groups=cv_groups))
+            split_meta = [(1, i + 1, tr, te, df_reaction_all.iloc[te][group_col].unique())
+                        for i, (tr, te) in enumerate(split_iter)]
+        elif cv_type in ["loso", "custom_loso"]:
+            split_meta = split_records
         else:
             split_iter = cv_splits.split(X, y) if hasattr(cv_splits, "split") else cv_splits
+            split_meta = [(1, i + 1, tr, te, df_reaction_all.iloc[te][group_col].unique())
+                        for i, (tr, te) in enumerate(split_iter)]
 
-        for fold_idx, (train_idx, test_idx) in enumerate(split_iter):
-            fold_subjects = df_reaction_all.iloc[test_idx][group_col].unique().tolist()
+        for repeat, fold, train_idx, test_idx, test_groups in split_meta:
             fold_info.append({
-                "fold": fold_idx,
-                "test_subjects": fold_subjects,
+                "repeat": repeat,
+                "fold": fold,
+                "test_subjects": list(test_groups),
                 "n_train": len(train_idx),
                 "n_test": len(test_idx),
             })
-
-    fold_info = pd.DataFrame(fold_info)
 
     # -----------------------------
     # fit final model on full data
