@@ -21,3 +21,6 @@ Thumbs.db
 
 # Logs
 *.log
+Output/
+*.pyc
+__pycache__/
